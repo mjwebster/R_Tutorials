@@ -4,13 +4,13 @@ These are a series of tutorials designed for journalists interested in learning 
 They are designed to walk you through data that is mostly pre-written, but then opportunities for you to write your own code, as well. The DIY lessons are ones that you would create entirely from scratch (with answers provided). 
 
 # 1- Setting up R
-This is just a short video that walks you through installing R and RStudio; launching RStudio and installing a few packages. There is an R script included here that has code you can use to install all the packages needed for the subsequent tutorials.
+This is just a short video that walks you through installing R and RStudio; launching RStudio and installing a few packages. There is an R script included here that has code you can use to install all the packages needed for the subsequent tutorials. You can  <a href="https://youtu.be/NPSletCwyGQ">view this video on YouTube.</a>
 
 # 2 - Gentle Introduction
-This has a short video and data that you can use to create your first project and Notebook script, and get a taste of some of the code from Tidyverse that we'll use for data analysis.
+This has a short video and data that you can use to create your first project and Notebook script, and get a taste of some of the code from Tidyverse that we'll use for data analysis.You can <a href="https://youtu.be/5FlFTmXkWrQ">view this video on YouTube.</a>
 
 # 3 - Tidyverse
-This is where we really get moving with importing data and going through the main components of Tidyverse's dplyr package for basic data analysis
+This is where we really get moving with importing data and going through the main components of Tidyverse's dplyr package for basic data analysis. You can also <a href="https://youtu.be/tx7nEYGMb28">view a video matching this exercise on YouTube.</a>
 
 # 4 - Death data analysis
 This is a continuation of the previous exercise, but this time using more complex data from the Minnesota death certificates database. Brief introduction to making plots with ggplot2.
