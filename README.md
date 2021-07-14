@@ -4,6 +4,10 @@ These are a series of tutorials designed for journalists interested in learning 
 They are designed to walk you through data that is mostly pre-written, but then opportunities for you to write your own code, as well. The DIY lessons are ones that you would create entirely from scratch (with answers provided). 
 
 
+# Downloading:
+Under each tutorial folder, you'll find one or more items to download. The ones where you see a "data" folder and materials in that folder should be set up on your computer with the same directory structure (i.e. that "data" is a sub-folder of the one where you are storing the script file). 
+
+
 # 1- Setting up R
 This is just a short video that walks you through installing R and RStudio; launching RStudio and installing a few packages. There is an R script included here that has code you can use to install all the packages needed for the subsequent tutorials. You can  <a href="https://youtu.be/NPSletCwyGQ">view this video on YouTube.</a>
 
