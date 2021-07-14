@@ -1,0 +1,171 @@
+---
+title: "Tidyverse part 1"
+output: html_notebook
+---
+
+
+
+```{r, warning=FALSE, message=FALSE}
+#To run a chunk of code in Notebook or RMarkdown, there are several options. One is to push the green arrow over in the upper right corner of this grey area. Another is to have your cursor anywhere in the grey area and use Control-Shift-Enter on your keyboard. You can also use the options in the Run pull-down menu at the top of the page. 
+
+# You have the option to run the entire chunk of code, or to highlight a line or two and only run that line or two. (to do just a line, keyboard shortcut is Control-Enter)
+
+
+
+#Load the libraries
+library(tidyverse) #https://www.tidyverse.org/
+library(janitor) #Used for cleaning data
+
+
+
+#import our data
+babynames <-  read_csv("./data/MA.TXT", col_names=FALSE,
+                     col_types=cols(X2="c")) %>% 
+        rename(state=X1, gender=X2, yr= X3, name=X4, num_births=X5)
+
+
+```
+
+
+# Seeing the column names in your data frame
+```{r}
+#this Base R function called names() is useful for displaying your column names when you are writing code
+
+names(babynames)
+```
+
+
+# DIY
+Insert a code chunk and write a query filtering to the year 2018
+
+
+
+
+
+
+
+# Filter and select columns
+```{r}
+#Let's filter to 2018 and only the boys and select just a couple columns
+babynames %>% filter(yr==2018, gender=='M') %>% select(name, num_births)
+```
+
+
+
+# Arrange()
+```{r}
+#it looks like it's going in descending order, but let's make sure by adding the arrange() verb
+babynames %>% filter(yr==2018, gender=='M') %>% select(name, num_births) %>% arrange(desc(num_births))
+
+
+# arrange(numbirths) would put it in ascending order
+
+```
+
+
+
+Only those with 300 or more births in 2018
+```{r}
+#let's look at all the names (both boys and girls) from 2018 that had 300 or more births
+
+
+babynames %>%  filter(yr==2018, num_births>=300) %>%  select(gender, name, num_births) %>%  arrange(desc(num_births))
+```
+
+# Indenting code
+```{r}
+#Notice that our code is getting really long. Let's indent by hitting return AFTER the pipe
+#the pipe must always be at the end of a line; never at the beginning
+
+#Let's look for all the records for the name "Evelyn" in the last 10 years
+babynames %>%
+  filter(name=='Evelyn', yr>=2009) %>%
+  select(gender, yr, num_births) %>% 
+  arrange(yr)
+
+
+
+```
+
+# Summarize our data
+```{r}
+#one of the verbs in dplyr -- called summarize or the British summarise -- allows us to do math. 
+#We can count records, sum the values in a column, calculate a mean (average), calculate minimum, maximum, etc.
+#the stats package let's you calculate a median (we don't have that installed)
+
+# a simple thing we can do is count the number of records in our data frame
+#  n() is a function that counts records
+# I'm assigning the results a column label called "numrecords"
+#This is similar to SQL where you might do something like this:
+
+# select count(*) as numrecords from babynames
+
+babynames %>% summarize( numrecords = n() )
+```
+
+# Sum values
+```{r}
+#How many babies were born in 2018?
+# the sum() function allows us to add up the values in a column
+# in SQL, this would be:  select sum(num_births) from babynames where yr=2018
+#Notice that I didn't give the column a name, so it defaulted to this
+
+babynames %>% 
+  filter(yr==2018) %>% 
+  summarize( sum(num_births) )
+
+
+```
+
+# Group by
+
+Often when we summarize, we want to look for trends based on "groups" in our data<br>
+For example, could we change our last query so that it shows us how many babies were boys and how many were girls?
+```{r}
+
+#we'll use the dplyr verb called "group_by" to tell R which groups we want to count up
+#Note the group_by comes before the summarize
+
+babynames %>% 
+  filter(yr==2018) %>% 
+  group_by(gender) %>% 
+  summarize( numbabies = sum(num_births) )
+
+```
+
+
+
+Will this code work?
+```{r}
+babynames %>% 
+  filter(name=="MARY") %>% 
+  group_by(yr) %>% 
+  summarise(num_babies = sum(num_births))
+```
+
+
+
+
+
+# DIY:
+How many babies were born each year?<br>
+Insert a code chunk and write your own query
+
+
+
+
+
+
+How many female babies were born each year?<br>
+Insert a code chunk and write your own query
+
+
+
+
+
+
+
+How many babies named Frances were born each year?<br>
+Insert a code chunk and write your own query
+
+

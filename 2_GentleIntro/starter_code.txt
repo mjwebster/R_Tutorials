@@ -1,0 +1,10 @@
+#Load the libraries
+library(tidyverse) #https://www.tidyverse.org/
+library(janitor) #Used for cleaning data
+
+
+
+#import our data
+babynames <-  read_csv("MA.TXT", col_names=FALSE,
+                     col_types=cols(X2="c")) %>% 
+        rename(state=X1, gender=X2, yr= X3, name=X4, num_births=X5)

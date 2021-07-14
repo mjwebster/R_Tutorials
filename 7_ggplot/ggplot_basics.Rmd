@@ -1,0 +1,410 @@
+---
+title: "Basics of ggplot2"
+author: "MaryJo Webster"
+date:  "Last updated: `r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+```
+
+
+
+```{r, warning=FALSE, message=FALSE}
+#Load libraries
+library(tidyverse) #includes ggplot2
+library(janitor) #for cleaning up column names on the import
+library(readxl) #for importing excel files
+library(scales) #for setting labels on x and y scales
+library(lubridate) # for date functions
+library(ggthemes)  #to add themes/styling to charts
+
+
+
+
+#import county population data for Massachussetts
+ma_pop <-  read_csv('./data/co-est2018-alldata.csv') %>% 
+  clean_names() %>% 
+  filter(sumlev=='050', stname=='Massachusetts') %>%  #filter to only county-level records for MA
+  select(1:18) %>%  #keep only the first 18 columns
+  mutate(ctyname = str_trim(str_replace(ctyname, "County", ""))) #get rid of the 'County' as part of the name
+
+
+
+
+```
+
+# Look at our data
+```{r}
+view(ma_pop)
+```
+
+# What's the 2018 population of each county?
+```{r}
+ma_pop %>%
+  select(ctyname, popestimate2018) %>%
+  arrange(desc(popestimate2018))
+```
+
+
+
+# Basics of ggplot2
+
+```{r}
+
+#BASIC CODE FOR A column CHART
+#the name of the data frame, and the aesthetics (what to use for x axis and what to use for y axis)
+#then on a new line the type of plot (geom_bar, geom_line, geom_point, etc.)
+#Notice the plus sign at the end of the first line
+
+ggplot(ma_pop , aes(x=ctyname, y=popestimate2018)) +
+  geom_bar(stat="identity")
+
+```
+
+```{r}
+#CONVERT TO A HORIZONTAL BAR CHART
+ggplot(ma_pop , aes(x=ctyname, y=popestimate2018))+
+  geom_bar(stat="identity")+
+  coord_flip() #this converts it to horizontal
+```
+
+
+
+```{r}
+#ORDER BY THE POPULATION SIZE - using function from forcats package (part of tidyverse)
+#AND ADD SOME COLOR TO THE BARS
+#color is for the outline; fill is inside the bars
+
+ggplot(ma_pop, aes(x=fct_reorder(ctyname, popestimate2018), y=popestimate2018)) + 
+  geom_bar(stat="identity", color="black", fill="blue")+
+  coord_flip()
+```
+
+
+# Let's add more styling
+
+
+```{r}
+#Use colorbrewer2.org to get better colors using hex values
+
+ggplot(ma_pop, aes(x=fct_reorder(ctyname, popestimate2018), y=popestimate2018)) + 
+  geom_bar(stat="identity", color="#9ebcda", fill="#9ebcda")+
+  coord_flip()
+```
+
+
+# improve the axis titles and labels
+
+```{r}
+
+#https://ggplot2.tidyverse.org/reference/scale_continuous.html
+#note: the Y axis is along the bottom because this is flipped
+
+
+
+ggplot(ma_pop, aes(x=fct_reorder(ctyname, popestimate2018), y=popestimate2018)) + 
+  geom_bar(stat="identity", color="#9ebcda", fill="#9ebcda")+
+  coord_flip()+
+  scale_y_continuous(name="Population", labels = scales::comma)+ #this uses the scales package
+  scale_x_discrete(name="County")
+```
+
+```{r}
+#Add title/subtitle/caption
+
+ggplot(ma_pop, aes(x=fct_reorder(ctyname, popestimate2018), y=popestimate2018)) + 
+  geom_bar(stat="identity", color="#9ebcda", fill="#9ebcda")+
+  coord_flip()+
+  scale_y_continuous(name="Population", labels = scales::comma)+  
+  scale_x_discrete(name=NULL)+       #this tells it to not put a label on the x axis 
+  labs(title = "Massachusetts county population", 
+       subtitle = "2018",
+       caption = "Source: US Census")
+```
+
+# Add data labels
+
+```{r}
+# this is one of the trickiest things to pull off in ggplot!
+
+ggplot(ma_pop, aes(x=fct_reorder(ctyname, popestimate2018), y=popestimate2018)) + 
+  geom_bar(stat="identity", color="#9ebcda", fill="#9ebcda")+
+  coord_flip()+
+  scale_y_continuous(name="Population", labels = scales::comma)+
+  scale_x_discrete(name=NULL)+      
+  labs(title = "Massachusetts county population", 
+       subtitle = "2018",
+       caption = "Source: U.S. Census Bureau")+
+  geom_text(stat="identity", label=comma(ma_pop$popestimate2018), hjust= 1, size=3) #this adds labels
+```
+
+# Use a theme for styling
+```{r}
+# use a theme from ggthemes package
+
+
+#High charts theme
+ggplot(ma_pop, aes(x=fct_reorder(ctyname, popestimate2018), y=popestimate2018)) + 
+  geom_bar(stat="identity", color="#9ebcda", fill="#9ebcda")+
+  coord_flip()+
+  scale_y_continuous(name="Population", labels = scales::comma)+
+  scale_x_discrete(name=NULL)+      
+  labs(title = "Massachusetts county population", 
+       subtitle = "2018",
+       caption = "Source: U.S. Census Bureau")+
+  geom_text(stat="identity", label=comma(ma_pop$popestimate2018), hjust= 1, size=3)+
+  theme_hc()
+```
+
+```{r}
+#FiveThirtyEight theme
+ggplot(ma_pop, aes(x=fct_reorder(ctyname, popestimate2018), y=popestimate2018)) + 
+  geom_bar(stat="identity", color="#9ebcda", fill="#9ebcda")+
+  coord_flip()+
+  scale_y_continuous(name="Population", labels = scales::comma)+
+  scale_x_discrete(name=NULL)+      
+  labs(title = "Massachusetts county population", 
+       subtitle = "2018",
+       caption = "Source: U.S. Census Bureau")+
+  geom_text(stat="identity", label=comma(ma_pop$popestimate2018), hjust= 1, size=3)+
+  theme_fivethirtyeight()
+
+
+
+
+```
+
+
+# Save plot to jpg
+```{r}
+ggsave("ma_county_pop.jpg", width=8, height=5, units="in", dpi="print")
+```
+
+
+
+
+# How have populations in each county changed?
+
+
+
+## Calculate percentage change
+```{r}
+#first we need to create a column with percentage change from 2010 to 2018
+
+ma_pop <- ma_pop %>%
+  mutate(pctchange2010_2018 = (popestimate2018-popestimate2010)/popestimate2010)
+
+
+
+# look at what we have
+
+ma_pop %>%  
+  select(ctyname, pctchange2010_2018) %>% 
+  arrange(desc(pctchange2010_2018))
+```
+
+
+# YOUR TURN 
+## Make a basic bar chart showing percent change in each county
+
+```{r}
+
+
+
+
+
+```
+
+
+
+
+# Your Turn
+--Add: titles, axis labels, improve colors
+
+hint: you'll need scales::percent instead of scales::comma
+```{r}
+
+
+
+```
+
+
+
+
+# People who died in deer hunting accidents
+
+```{r}
+# import data
+deer <- read_xlsx('./data/DEER.xlsx') %>% clean_names()
+```
+
+
+```{r}
+# very basic chart
+# ggplot assumes you want to count the records since it doesn't have a y value
+
+ggplot(deer, aes(x=injury)) +
+  geom_bar()
+```
+
+
+
+```{r}
+# add colors and style the axes
+
+ggplot(deer, aes(x=injury)) +
+  geom_bar(color="#7fcdbb", fill="#7fcdbb")+
+  scale_y_continuous(name="People", labels = scales::comma)+
+  scale_x_discrete(name="Injury severity")
+```
+
+
+# Stacked bar chart
+```{r}
+
+
+deer_by_year <-  deer %>% mutate(yr = year(date)) %>% 
+  group_by(yr, injury) %>% 
+  summarise(total=n())
+
+
+ggplot(deer_by_year, aes(x=yr, y=total, fill=injury)) +
+  geom_col()+
+  scale_fill_manual(values = c("#0868ac", "#43a2ca", "#7bccc4"), labels=c("Fatal", "Major", "Minor"))
+
+```
+
+
+```{r}
+# add labels, etc
+
+ggplot(deer_by_year, aes(x=yr, y=total, fill=injury)) +
+  geom_col()+
+  scale_fill_manual(values = c("#0868ac", "#43a2ca", "#7bccc4"), labels=c("Fatal", "Major", "Minor"))+
+    scale_y_continuous(name="Total")+
+  scale_x_continuous(name="Year", breaks=seq(1987, 1994, 1) )+      
+  labs(title = "People killed in hunting accidents in Wisconsin", 
+       subtitle = "1987-1994",
+       caption = "Source: Associated Press")
+```
+
+
+# Line chart- Average age of shooter
+```{r}
+
+# here we'll create a column with just the year
+# and then we will average the shooter age. We need na.rm=TRUE for it to ignore the NULL values
+
+
+avg_shooter <-  deer %>% mutate(yr = year(date)) %>% 
+  group_by(yr) %>% 
+  summarise(avg_age = mean(sage, na.rm=TRUE))
+
+
+
+```
+
+```{r}
+# basic line chart
+ggplot(avg_shooter, aes(x=yr, y=avg_age))+
+  geom_line(stat="identity")
+```
+
+
+# Zero base the axis
+
+```{r}
+ggplot(avg_shooter, aes(x=yr, y=avg_age))+
+  geom_line(stat="identity")+
+  scale_y_continuous(name="Average age", limits=c(0,40))+  #zero base the Y axis using limits
+  scale_x_continuous(name="Year", breaks=seq(1987, 1994, 1)) 
+```
+
+
+
+# Pretty up our chart
+```{r}
+ggplot(avg_shooter, aes(x=yr, y=avg_age))+
+  geom_line(stat="identity", color="blue", size=1.25)+
+  scale_y_continuous(name="Average age", limits=c(0,40))+  #zero base the Y axis using limits
+  scale_x_continuous(name="Year", breaks=seq(1987, 1994, 1)) +
+    labs(title = "Average age of people involved in hunting accidents in Wisconsin", 
+       subtitle = "1987-1994",
+       caption = "Source: Associated Press")+
+  theme_hc()
+```
+
+
+## How many incidents each year were self-inflicted versus second-person?
+hint: column = type
+
+```{r}
+#Make a new data frame first
+#leave out the records where the type was NULL/blank
+
+deer_by_type <-  deer %>% mutate(yr = year(date)) %>% 
+  filter(type!='NA') %>% 
+  group_by(yr, type) %>% 
+  summarise(total=n())
+
+
+ggplot(deer_by_type, aes(x=yr, y=total, fill=type)) +
+  geom_col()+
+  scale_fill_manual(values = c("#0868ac", "#43a2ca"), labels=c("Self-Inflicted", "Second-Person"))
+
+
+```
+
+# Ordering your values
+
+```{r}
+# how do you figure out what order the labels go in? Check your data table to see what order they appear in
+#then also compare your chart back to your data
+# Sure-fire approach is to refactor them first
+# the order you list them in here is how they will appear in your charts or queries
+
+deer_by_type$type <- factor(deer_by_type$type, levels=c("si", "sp"))
+```
+
+
+
+# Scatterplot
+
+## Years of experience of shooter and victim
+
+```{r}
+ggplot(deer, aes(x=sexper, y=vexper))+
+  geom_point(stat="identity")
+```
+
+## Why do we have a straight diagonal line of dots?
+
+```{r}
+ggplot(deer %>% filter(type=='sp'), aes(x=sexper, y=vexper))+
+  geom_point(stat="identity")
+```
+
+
+# YOUR TURN
+hint: These will be very similar to earlier ones we did. It's ok to copy code!
+
+## Make a simple bar chart (or column) showing total victims by gender (all years combined)
+
+```{r}
+
+```
+
+
+## Make a line chart showing total people (regardless of injury severity) each year
+
+```{r}
+
+```
+
+
+
+# Knit the page
+Push the "Knit" button (near the save button) and it will create an HTML page<br>
+It won't work if you have any errors in your code anywhere on the page

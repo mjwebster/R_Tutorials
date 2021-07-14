@@ -1,0 +1,390 @@
+---
+title: "Opioid deaths in Minnesota"
+output: html_notebook
+---
+
+```{r import, warning=FALSE, message=FALSE}
+
+#install packages (including ones for later sessions)
+#this code checks to see if you have these packages installed and 
+#only installs if you don't already have it
+
+ packages <- c("tidyverse", "stringr", "janitor", "rmarkdown", "lubridate", "ggthemes", "formattable")
+if (length(setdiff(packages, rownames(installed.packages()))) > 0) {
+  install.packages(setdiff(packages, rownames(installed.packages())), repos = "http://cran.us.r-project.org")  
+}
+
+#while that's running let's review the data we're going to use & record layout
+#see the PDF file in the data sub-directory (where you created this project)
+
+#load packages 
+library(tidyverse)
+library(ggthemes) #this will help make our charts look better
+library(janitor) #for data cleanup
+library(lubridate) #for working with dates
+library(stringr) #for data clean up
+library(formattable) #for displaying data (percents, dollars, etc)
+
+
+#Import our data
+#Note that our data is stored in a sub-directory called "data"
+
+#let's start by just using a simple import to see if we can bring it in okay
+#this is Minnesota death certificate data where one or more opioids were identified as a cause of death
+
+deaths <- read_csv('./data/opiate_deaths.csv')
+
+
+#let's see what happened
+str(deaths)
+```
+
+
+```{r}
+#Did you notice that everything is character format? 
+#that's going to be a problem for our date fields and anything we want stored as number (like ageyears)
+
+#we're going to use the col_types argument to ensure the dates get stored as dates
+#and that the ageyears column is stored as an integer
+
+deaths <- read_csv('./data/opiate_deaths.csv',
+                   col_types=cols(.default="c",  #this is setting all other columns to character
+                                  BIRTHDATE=col_date("%m/%d/%Y"),
+                                  DEATHDATE=col_date("%m/%d/%Y"),
+                                  INJURY_DATE=col_date("%m/%d/%Y"),
+                                  AGEYEARS="i"))  #this is setting ageyears column to integer
+
+#more info here about the date formats: https://readr.tidyverse.org/reference/parse_datetime.html
+
+```
+
+
+
+
+# Review column names
+```{r , include=FALSE}
+#this is a Base R function that displays the columns in a data frame
+names(deaths)
+```
+
+# Ugh- all those capital letters
+```{r}
+#If you have a data file that has a lot of problematic column names -- for example, capital letters or proper case or spaces or symbols -- you can use the clean_names() function from janitor package to clean them up. 
+
+#You can run this after importing (which we'll do here) or tack it on with the same code for the import 
+
+deaths <-  deaths %>% clean_names()
+```
+
+
+
+# Explore our data with select and filter<br>
+How many were less than 18 years old?
+
+```{r}
+#select only the ones who were less than 18 years old
+
+deaths %>%  select(firstname, ageyears, rescity, deathdate) %>% 
+  filter(ageyears < 18) %>% 
+  arrange(ageyears) 
+
+```
+
+# Filtering by a specific date
+```{r}
+#if you want to filter to a specific date, note how dates are stored in R
+
+deaths %>%
+  filter(deathdate=='2015-12-31') %>%
+  select(deathdate, firstname, lastname, ageyears) 
+  
+```
+
+
+# Who died on New Year's Eve?
+This uses the month() and day() functions from lubridate package
+
+```{r}
+
+#this finds anyone who died on Dec 31st, regardless of year
+deaths %>%
+  filter(month(deathdate)==12 & day(deathdate)==31) %>%
+  select(firstname, lastname, ageyears, deathdate)
+```
+
+
+
+
+
+
+# What race categories do we have?
+Use this to see what values are in a given column
+```{r , include=FALSE}
+#this syntax is a quick way to get a frequency count
+deaths %>% count(race)
+```
+
+## Now let's use those race values for some filtering...
+
+```{r}
+
+
+#there are two options for an "or" search
+
+#option 1 using the pipe character
+
+# find people who were either African American or American Indian
+deaths%>%
+  filter(race=="African American" | gender=='F') %>%
+  select(lastname, deathdate, gender, race)
+
+
+
+
+
+```
+
+
+
+
+```{r}
+#option 2 using %in%  (this one would be more useful if you have a long series you want to include)
+# Find people who were Japanese, Chinese or Korean
+deaths%>%
+  filter(race %in% c("Japanese", "Chinese", "Korean")) %>%
+  select(lastname, deathdate, gender, race)
+```
+
+
+Filtering with a wildcard<br>
+<p>Too often, our data is inconsistent and telling it to find one thing will be insufficient. In filters in Excel, we have the option to choose "begins with" or "contains" to find values that might not perfectly match. In this dataset, there are several variations for people described as being white. To get them, we'll need this kind of wildcard.</p>
+<p>To do this, we're going to use dplyr's filter function, along with str_detect(), which is a way to do string and pattern matching.</p>
+
+
+```{r }
+#the syntax uses the str_detect() function from the stringr package (part of Tidyverse)
+#  format is  str_detect(dataframename, "what to search for")
+
+  deaths %>%
+  filter(str_detect( race, "multi")) %>%
+  group_by(race) %>%
+  summarize(count=n()) 
+```
+
+
+Filtering between two values<br>
+Perhaps we want to find all the people who were between ages 18 and 21. Note that I'm using greater than-equal to and less than-equal to, so that it includes 18 and 21 in my results.
+
+```{r }
+deaths %>%
+  filter(ageyears>=18, ageyears<=21) %>%
+  summarise(count=n()) 
+```
+
+
+
+
+# On your own 
+Insert an R code chunk and pick something to filter by
+
+>
+>
+>
+>
+>
+
+
+
+# Practice summarizing.....
+
+
+
+## How many were black females? (returns a single number)
+```{r}
+
+deaths %>% 
+   filter(gender=='F' , race=='African American') %>% 
+   summarize(numdeaths = n() )
+```
+
+
+## Average age of all people
+```{r}
+deaths %>% 
+  summarize( avg_age = mean(ageyears) ) 
+```
+
+## Average age by gender
+```{r}
+deaths %>% 
+  group_by(gender) %>% 
+  summarize( Average_Age = mean(ageyears) ) 
+```
+
+
+
+
+## How many people of each gender died?
+```{r}
+#note that we can count records because each record is a person
+deaths %>%
+  group_by(gender) %>% 
+  summarise(numdeaths = n()) 
+```
+
+
+
+# Using mutate()
+Percentage of people who died by gender
+```{r}
+#the dplyr verb called mutate() allows us to add a new column
+#either to a temporary output (like we will do here) or to store it in the dataframe (we'll do that later)
+#You tell mutate the name of the new column (in this case I'm calling it "pct" and then you assign it values in some way)
+#You can do math, transfer information from another column, or use a case_when statement to change what gets put there
+#depending on other values in the table (we'll do that later)
+
+
+deaths %>% 
+  group_by(gender) %>% 
+  summarise(numdeaths = n())%>% 
+  mutate( pct = numdeaths/sum(numdeaths) ) %>% 
+  arrange(desc(pct))
+
+```
+
+# Put it all together
+Round numbers using a function from janitor package called round_half_up()
+```{r}
+deaths %>% 
+  group_by(gender) %>% 
+  summarise(numdeaths = n(), avgage = round(mean(ageyears),1)) %>% 
+  mutate(pct = round_half_up(numdeaths/sum(numdeaths)*100)) %>% 
+  arrange(desc(pct))
+```
+
+# display as percentage
+The formattable package lets you display results as a percentage
+
+```{r}
+
+deaths %>% 
+  group_by(gender) %>% 
+  summarise(numdeaths = n(), avgage = round(mean(ageyears),1)) %>% 
+  mutate(pct = percent(numdeaths/sum(numdeaths))) %>% 
+  arrange(desc(pct))
+
+```
+
+
+
+# Make query into a new dataframe
+```{r}
+female_deaths_byrace <-  deaths %>% 
+  filter(gender=='F') %>% 
+  group_by(race) %>% 
+  summarise(numdeaths = n()) %>% 
+  arrange(desc(numdeaths))
+
+
+#export that as a csv file
+#because we aren't telling it where to put the csv file, it will automatically 
+#go to our working directory
+#You'll see it appear in the Files tab after you run this code
+
+write.csv(female_deaths_byrace, 'female_deaths_byrace.csv', row.names=FALSE)
+
+
+```
+
+
+
+
+# Practice group by queries
+
+## How many people of each race died?
+Insert a code chunk and write your own query
+
+
+
+
+## Which county had the most deaths? (based on "rescounty" - which is where they lived)
+Insert a code chunk and write your own query
+
+
+
+
+
+
+
+
+
+# How many people died each year?
+We need a field with the year of death
+```{r}
+#We are going to create a new dataframe (overwriting the old one)
+#then we are going to tell it to use all the data from the old one
+#plus tack on a new variable called "deathyr" 
+#plus we're going to use a date function  called year() from the lubridate package
+
+
+deaths <-  deaths %>% mutate(deathyr=year(deathdate))
+
+
+
+```
+
+
+```{r}
+#now let's see what this gave us
+
+deaths %>% 
+  group_by(deathyr) %>% 
+  summarise(numdeaths = n())
+```
+
+
+
+
+# Create a chart
+How many people died each year?
+
+
+```{r}
+#the most simple code needed for a chart using the ggplot2 package from Tidyverse
+#syntax:  ggplot(dataframe_name, aes(x= columnname))
+#aes means aesthetics
+
+ggplot(deaths, aes(x=deathyr)) + 
+  geom_bar()
+
+#this is simply relying on stat_count in ggplot to count the records
+```
+
+
+
+# Jazz it up
+Also change the theme and color, add labels
+```{r}
+ggplot(deaths, aes(x=deathyr)) + 
+  geom_bar(color="black", fill="#3e0045")+   #this adds the color of the bars (fill), and the outline
+  scale_x_continuous(name="Year", breaks=seq(2005, 2017, 1))+  #this sets the X axis labels
+  theme_fivethirtyeight() +  #this is a theme from ggthemes to set fonts, appearance, etc
+  labs(title = "Opiate deaths in Minnesota", 
+       subtitle = "2005-2017",
+       caption = "Source: Minnesota Department of Health")
+
+
+
+
+```
+
+
+
+# Export our chart
+```{r}
+#https://ggplot2.tidyverse.org/reference/ggsave.html
+
+ggsave("deaths_by_year_chart.jpg", width=8, height=5, units="in", dpi="print")
+```
+
+

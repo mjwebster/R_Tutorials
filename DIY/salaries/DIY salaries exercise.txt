@@ -1,0 +1,33 @@
+DIY exercise using city salary data
+
+Download the Excel file called "stpaulsalaries.xls" and the PDF file called "record layout" that goes with it.  Review the record layout to see what fields it includes. 
+
+This is employee salary data for the city of St. Paul, Minn. from calendar year 2009. It includes basic information about each worker -- job title, length of employment, department -- and then both the hours they worked and the pay, broken down between regular pay and overtime pay. There is also an "other pay" which tends to be bonuses or payouts from unused sick time, etc. 
+
+Open RStudio and create a new RMarkdown page, point it to the directory where you saved the Excel file. 
+
+Load the libraries you will need. (Hint: look back at files we used in class for ideas)
+
+Import the Excel file. Make sure all the fields came in with the right formats that you want. 
+
+1)In a new column, calculate what percentage OT was of each person’s total wages. (hint: you’re doing a “percent of total” calculation for each record). Who has the highest percentage? (include their name, job title and department)
+
+2) For those with OT hours… in a new column, calculate how many OT hours they clocked, on average, each week (hint: 52 weeks per year). Who had the most and how much? (include their name, job title and department)  Remember that using Filter on your query will limit it to only those you identify in your filter. 
+
+
+3) Now make a summary table (a new data frame) to see what patterns there are at the department level.  In other words, we’re going to make a new table that has one record for each department – and all this pay information summarized up. Make sure you include the total wages, total overtime pay, and total hours and total overtime hours. Also include a count (count=n()), which will give you the number of employees in each department. Use the formattable package's currency() function to display dollar values.
+
+Using that new table, answer these questions:
+4) which department paid out the most in total compensation?
+
+5) Which department had the highest average salary and what was the dollar amount?
+(Hint: Make a new column that has the total wages divided by the number of employees)
+
+6) In a new column, calculate the percentage that overtime pay makes up of the total wages for each department. Use the formattable package percent() function to display it as a percentage. Which department had the highest? 
+
+7) In a new column, calculate the average overtime hours per person (hint:  you have a field with the number of employees in each department). Which department had the highest rate and what was the rate?
+
+
+
+
+

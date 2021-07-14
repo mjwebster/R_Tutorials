@@ -1,0 +1,478 @@
+---
+title: "COVID analysis"
+author: "By MaryJo Webster"
+date:  "Last updated: `r Sys.Date()`"
+output:
+  html_document: 
+    toc: true
+    to_depth: 1
+    toc_float: true
+    theme: flatly
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r}
+
+
+library(tidyverse)
+library(janitor)
+library(lubridate)
+library(RCurl) #we'll use this to grab a URL
+library(stats)
+
+
+# We're going to use COVID case and death data compiled by the New York Times
+# we'll pull it directly from their live github page
+# Documentation: https://github.com/nytimes/covid-19-data
+
+
+#assign the URL to a variable that we can reference in following code
+url <- "https://raw.githubusercontent.com/nytimes/covid-19-data/master/us-counties.csv"
+
+
+#use the read_csv() function to import the data from the URL and turn it into a dataframe
+covid <- read_csv(url)
+
+
+#Important to note that the data is cumulative. There is a record for each date in each county when cases were reported, but each new date is an accumulation from all the previous dates
+# in order to look at new cases per day or per week, we need to do some conversions
+
+
+#add columns that provide daily counts of cases and deaths
+#this uses the lag() function from the stats package
+#because we are first grouping by county, state and fips number, then the lag() function knows to 
+#look within that group for the previous date.  
+#We need the case_when() in order to deal with the 1st record for each county, otherwise it will be left blank
+
+
+# https://www.rdocumentation.org/packages/stats/versions/3.6.2/topics/lag
+
+covid <- covid %>%
+  group_by(county, state, fips) %>%
+  mutate(daily_cases = case_when(is.na(lag(cases))~ cases,  TRUE ~ cases - lag(cases)),
+         daily_deaths = case_when(is.na(lag(deaths))~ deaths, TRUE ~ deaths-lag(deaths)))
+                                                                                          
+
+# the ungroup() function comes in handy when it tries to group things you no longer want grouped
+#if we don't do this, it will include county and the fips even if we don't want them because we grouped it in the query above
+covid <- covid %>% ungroup()
+
+```
+
+# Explore our data
+
+
+
+```{r}
+# do we have all 50 states?
+
+
+covid %>% count(state)
+
+
+```
+
+
+```{r}
+# what's the first date recorded in the data?
+
+covid %>% summarise(first_date = min(date))
+```
+
+
+```{r}
+#what counties reported data on that first date?
+# adjust the value in the filter accordingly
+
+covid %>% 
+  filter(date=='2020-01-21')
+
+
+```
+
+
+```{r}
+#What's the first date for my state?
+# adjust the value in the filter line to match your state
+
+covid %>% 
+  filter(state=="Minnesota") %>% 
+  summarise(first_date = min(date))
+```
+
+
+
+
+```{r}
+#Let's find the most recent date in the whole dataset
+
+covid %>% summarise(dt = max(date))
+
+
+
+```
+
+
+```{r}
+# save that recent date as a variable we can use later
+
+most_recent <-  covid %>% summarise(dt = max(date))
+```
+
+
+
+
+# Find all the records for your state on that most recent date
+```{r}
+# this code will be outdated by the time you try this yourself. Adjust filter accordingly
+
+covid %>% 
+  filter(date==most_recent$dt, state=='Minnesota') %>% 
+  select(date, county, state, daily_cases, daily_deaths)
+```
+
+
+YOUR TURN
+# filter to just your county/state and show the daily cases for each date
+```{r}
+
+
+```
+
+
+
+
+
+# Summarize the deaths in each state
+
+```{r}
+#Notice that this is using the daily_deaths column
+
+covid %>% 
+  group_by(state) %>% 
+  summarise(tot_deaths = sum(daily_deaths)) %>% 
+  arrange(desc(tot_deaths))  #notice that I'm referencing the new column i just made in the summarise line
+
+
+```
+
+YOUR TURN
+```{r}
+# summarize the total cases in every state
+
+
+```
+
+
+
+
+
+# Add a filter
+```{r}
+# summarise the total cases in the counties in your state, ordered largest to smallest
+
+
+covid %>% 
+  filter(state=="Minnesota") %>% 
+  group_by(county) %>% 
+  summarise(tot_cases = sum(daily_cases)) %>% 
+  arrange(desc(tot_cases))
+
+
+
+
+```
+
+
+
+# By week
+
+```{r}
+
+# Use the week() and year() functions from the lubridate package to add columns that identify the year and week for each row
+
+covid <- covid %>% mutate(weeknumber = week(date),
+                          yr = year(date))
+
+```
+
+# Summarise total cases nationally by yr & weeknumber
+```{r}
+
+covid %>% 
+  group_by(yr, weeknumber) %>% 
+  summarise(tot_cases = sum(daily_cases))
+
+```
+
+# add week start and end dates
+
+```{r}
+# when we get to doing charts and other calculations later, it's going to get challenging to work with weeknumbers that cross years. So let's add a week start and week end date to be able to put those to use later
+
+start_end_dates <-  covid %>% group_by(yr, weeknumber) %>% 
+  summarise(start_date = min(date),
+            end_date = max(date))
+
+
+
+covid <-  left_join(covid, start_end_dates, by=c("yr"="yr", "weeknumber"="weeknumber"))
+```
+
+
+
+
+YOUR TURN
+
+```{r}
+# summarise the cases in your state by start date
+
+
+```
+
+YOUR TURN
+```{r}
+# summarise the cases in each state for week number 40 in yr 2020
+
+
+
+
+```
+
+# Get county census data
+```{r}
+
+# Download the file from the Census website
+# give it the URL and then what you want the downloaded file to be named
+
+download.file("https://www2.census.gov/programs-surveys/popest/datasets/2010-2019/counties/totals/co-est2019-alldata.csv", 'countypop2019.csv')
+
+
+#import the file to a data frame called "pop"
+
+pop <-  read_csv('countypop2019.csv') %>%
+  clean_names() %>%
+  filter(sumlev=='050') %>%   #filter it to only the rows that are for counties
+  select(state, county, stname, ctyname, popestimate2019) # limit to only necessary columns
+
+
+# the COVID data has a FIPS code (which is the state code plus the county code). In our population data
+# those are in separate fields, so we need to put them together
+# paste() is a function from Base R that helps you string things together. The sep argument is necessary, otherwise it will put spaces between each thing. Here we're telling it to put nothing.
+
+pop <-  pop %>% mutate(fips = paste(state, county, sep=""))
+
+
+```
+
+
+# Joining population data
+```{r}
+# like SQL, Tidyverse has inner_join, right_join, left_join and some other options (such as anti_join that lets you find the records that did NOT match)
+
+#in this case, let's make sure we keep all the COVID records, so we'll do a left_join
+# left refers to the first table listed (in this case, "pop" is our right table)
+#notice we're going to make a new data frame
+
+
+#notice how both tables have columns called "county" and "state"?
+# we can avoid having duplicates in our joined data by specifying which columns we want transferred from pop into the new table
+# this MUST include the joining column
+
+covid_pop <-  left_join(covid, pop %>% select(fips, popestimate2019), by=c("fips"="fips"))
+
+
+```
+
+# Check to make sure population filled in for all records
+```{r}
+covid_pop %>% filter(is.na(popestimate2019))
+```
+
+
+# Math doesn't work properly when there are NULLS
+```{r}
+# let's switch the NULLS to zeros so we don't encounter problems ahead
+
+covid_pop$popestimate2019[is.na(covid_pop$popestimate2019)] <-  0
+
+```
+
+
+
+# Calculate per capita rates
+```{r}
+# We can now calculate per capita rates for each record
+
+covid_pop <-  covid_pop %>% mutate(casesper10k = (daily_cases/popestimate2019)*10000,
+                                   deathsper10k = (daily_deaths/popestimate2019)*10000)
+
+
+# You'll see the daily deaths doesn't give us much of a per capita rate cause the number is often zero
+# We'll need to summarize our data first and then apply the per capita calculation
+```
+
+
+# Which county currently has the highest per capita in cases?
+ filter to the most recent date (which we saved earlier)
+```{r}
+
+covid_pop %>%
+  filter(date == most_recent$dt, popestimate2019!=0) %>%  #this is using the saved variable; note that you have to list the dataframe name and the column name you are referencing 
+  arrange(desc(casesper10k)) %>% 
+  select(date, county, state, cases, casesper10k)
+
+```
+
+
+
+
+# Weekly analysis
+
+
+
+```{r}
+# this calculates both weekly net numbers (new cases and deaths that week) and the running cumulatives for each
+
+covid_per_week <-  covid_pop %>% 
+    select(fips,state, county, yr, weeknumber, start_date, daily_cases, daily_deaths, popestimate2019) %>% 
+  group_by(fips, state, county, start_date) %>%  #the order of this group by is crucial for the cumulative
+  summarise(weekly_cases = sum(daily_cases),
+            weekly_deaths = sum(daily_deaths)) %>% 
+    mutate(cum_cases = cumsum(weekly_cases),  #these calculate the running cumulative numbers
+         cum_deaths = cumsum(weekly_deaths))
+
+
+
+
+  #Here's how we can set a variable to determine the most current week in the data
+#then in the next query we can refer to that variable again so that it's reusable, even as we get more data
+#first we need to identify the year 
+current <- covid_per_week %>% ungroup() %>%  summarise(start = max(start_date))
+
+
+ 
+ 
+#let's see the current week for Ramsey County, Minnesota
+ 
+ covid_per_week %>%
+   filter(start_date == current$start, county=='Ramsey', state=='Minnesota')
+
+```
+
+# Add population to our weekly data and calculate per capita
+```{r}
+covid_per_week <-  left_join(covid_per_week, pop %>% select(fips, popestimate2019), by=c("fips"="fips"))
+
+#deal with NULL values
+covid_per_week$popestimate2019[is.na(covid_per_week$popestimate2019)] <-  0
+
+
+#add per capita calculations
+covid_per_week <-  covid_per_week %>% mutate(casesper10k = (weekly_cases/popestimate2019)*10000,
+                                   deathsper10k = (weekly_deaths/popestimate2019)*10000)
+```
+
+
+
+
+# Top 20 counties
+
+```{r}
+  
+  #to pull out the top counties from the most recent week, we'll use slice_max() from Tidyverse. 
+#we also need to throw in an ungroup() because it won't work without it
+
+#here we're going to tell it to grab the top 20 with casesper10k as how it determines the top ones
+  
+top20 <-   covid_per_week %>% 
+  ungroup() %>%
+  filter(start_date== current$start,  popestimate2019!=0)%>%
+  select(fips, state, county, casesper10k) %>%
+  slice_max(casesper10k, n=20)
+
+
+#doing format conversions like this often solves joining problems
+top20$fips <-  as.character(top20$fips)
+covid_per_week$fips <-  as.character(covid_per_week$fips)
+
+
+# Set a variable to identify 8 weeks earlier (subtract 49 days from the current week start date)
+ eight_weeks_ago <-  covid_per_week %>% ungroup() %>% summarise(number=current$start-49)
+
+
+
+#Now let's go pull the last few weeks of data for just these 10 counties so we can make a graphic
+
+top20_8weeks <-  inner_join(top20 %>% select(fips), covid_per_week, by=c("fips"="fips")) %>%
+  mutate(county_state = paste(county, state, sep=", ")) %>%
+  filter(start_date>=eight_weeks_ago$number)  
+
+
+
+```
+
+
+
+
+
+# Make plots for each county
+```{r}
+
+# http://zevross.com/blog/2019/04/02/easy-multi-panel-plots-in-r-using-facet_wrap-and-facet_grid-from-ggplot2/
+
+
+ggplot(top20_8weeks, aes(x=start_date, y=casesper10k)) +
+  geom_line(stat="identity", size=1, color="red")+
+  facet_wrap(~ county_state, ncol=5)
+
+```
+
+# State level
+```{r}
+
+# Summarise covid_per_week to get weekly per capita rates for each STATE
+
+# there are records in here where the county is listed as "unknown"; in these cases, we don't have
+#population estimates, so we need to filter them out so they don't muck up the analysis (if you try to add up a column with NULL values, it won't give you an answer)
+
+
+#Also filter it to just your state
+state_per_week <- covid_per_week %>%
+  filter(state=='Minnesota') %>%
+  group_by(state, start_date) %>%
+  summarise(state_pop = sum(popestimate2019),
+            state_cases = sum(weekly_cases)) %>% 
+  mutate(per10k = (state_cases/state_pop)*10000)
+
+
+#look at the results
+state_per_week
+
+```
+
+# Make a line chart
+```{r}
+ggplot(state_per_week, aes(x=start_date, y=per10k))+
+  geom_line(stat="identity")+
+  scale_y_continuous(limits=c(0, 100))
+```
+
+# How to do a group of states at the same time
+
+```{r}
+upper_midwest_per_week <- covid_per_week %>% filter(county!='Unknown', state %in% c("Minnesota", "Wisconsin", "North Dakota", "South Dakota", "Iowa", "Michigan")) %>% group_by(state, start_date) %>% summarise(state_pop = sum(popestimate2019),
+                                                             state_cases = sum(weekly_cases)) %>% 
+  mutate(per10k = (state_cases/state_pop)*10000)
+
+
+
+ggplot(upper_midwest_per_week, aes(x=start_date, y=per10k))+
+  geom_line(stat="identity")+
+  facet_wrap(~ state)
+```
+

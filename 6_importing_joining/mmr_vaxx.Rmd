@@ -1,0 +1,487 @@
+---
+title: "Importing and joining"
+output: html_notebook
+---
+
+```{r}
+#data: kindergarten vaccination rates from the 2017-18 schoolyear
+#includes all public and private schools serving kindergartners
+#source: Minnesota Department of Health
+# see record layout in the /data/ directory
+#we'll pair this with school data from the Minnesota Department of Education
+
+
+#use readr for delimited text files and fixed width text file
+#https://readr.tidyverse.org/
+
+#Excel
+#https://readxl.tidyverse.org/
+
+#Googlesheets (need to have a Gmail account)
+#https://datascienceplus.com/how-to-use-googlesheets-to-connect-r-to-google-sheets/
+
+#APIs
+#http://www.storybench.org/how-to-access-apis-in-r/
+
+#SPSS, SAS, STATA (2 options here)
+#https://haven.tidyverse.org/
+#https://cran.r-project.org/web/packages/foreign/index.html
+
+#IPUMS (census microdata)
+#https://cran.r-project.org/web/packages/ipumsr/index.html
+
+#muckrakr has function for importing/appending all csv's in the same directory
+#https://github.com/andrewbtran/muckrakr
+
+#RMySQL package -- link to a mySQL server
+
+
+library(tidyverse)
+library(janitor)
+library(stringr)
+library(readxl)
+library(scales) #needed for the percent_format on the ggplot
+options(scipen=999) #this prevents results from displaying as scientific notation
+library(formattable) #we're going to use this to display a percentage in a table
+
+
+
+
+```
+
+
+
+```{r}
+# BRING IN OUR DATA -------------------------------------------------------------
+
+
+#import from Excel
+#syntax:  df <- read_excel("./data/filename.xlsx", sheet="Sheet1", range="A1:Z500") %>% clean_names()
+
+
+kvaxx <-  read_excel("./data/Kindergarten_1718.xlsx", sheet="KINDERGARTEN_1718_COPY") %>% clean_names()
+
+
+
+
+#Look at the structure of the data we imported. Use str() function
+str(kvaxx)
+
+
+```
+
+
+
+
+```{r}
+
+#import no response data from csv
+#syntax:  df <-  read_csv("./data/filename.csv") %>% clean_names()
+#syntax with column formats:  df <-  read_csv("./data/filename.csv", col_types=cols(.default="c")) %>% clean_names()
+
+noresponse <-  read_csv("./data/noresponse_kind_1718.csv", col_types=cols(.default="c")) %>%
+  clean_names()
+
+#Let's check how it all came in
+str(noresponse)
+
+```
+
+
+
+
+
+
+```{r}
+
+# APPENDING DATA FRAMES ------------------------------------------------------
+
+#append no responses to the kindergarten file
+
+
+
+#first let's see how well the column names line up. 
+#Use names() function on both data frames
+
+#run this chunk and the next chunk, so you can see both sets of results
+
+names(noresponse)
+
+
+
+```
+
+```{r}
+names(kvaxx)
+
+```
+
+
+```{r}
+
+
+#Notice that the noresponse file has a "school_id"
+#in the kvaxx file, those numbers are there, but stored in 3 separate fields
+#We need to put them together into one field so we can match it to other data
+#we'll use mutate to add a new column
+#  the paste() function is part of Base R; it's a way to string things together
+#if you leave out the sep function (separator), it will put in spaces
+
+kvaxx <-  kvaxx %>% 
+  mutate(school_id= paste(district_num, 
+                          school_type, 
+                          school_num, 
+                          sep="-"))
+```
+
+
+
+```{r}
+#here's syntax for appending rows to another file
+#the file named first is where the rows from the other file will end up
+#note that here we are overwriting the existing dataframe
+#we'll use a function from dplyr  called bind_rows()
+
+kvaxx <-  bind_rows(kvaxx, 
+                    noresponse)
+
+```
+
+
+
+```{r}
+# REVIEW WHAT WE HAVE -----------------------------------------------------
+
+
+#Review our vaccination data
+#what can we say from it?
+#what questions would we like to ask?
+```
+
+
+
+# YOUR TURN
+```{r}
+#Let's bring in another file that will help us answer those questions
+
+#use read_csv() function to import school_list. 
+
+#Set columns to character
+#and use clean_names()
+
+
+
+
+
+
+
+
+
+
+```
+
+
+
+
+
+```{r}
+
+# JOINING DATA FRAMES -----------------------------------------------------
+
+#Now we need to JOIN the school_list to the kvaxx data frame. In other words, we'll add new rows
+#Note that the school_list file has far more rows than kvaxx. Any idea why?
+
+#Joining two files together requires having at least one common field. 
+#What is that here?
+
+#YOUR TURN
+#Use names() function to look at column names of both data frames
+
+
+
+
+
+
+
+
+
+
+```
+
+
+
+```{r}
+#Syntax for joining 
+#left_join means we'll keep all the rows from the 1st table
+#notice that I'm making a new dataframe
+
+kvaxx2 <- left_join(kvaxx,
+                    school_list,
+                    by=c("school_id"="school_id"))
+```
+
+
+```{r}
+#Acckk! we added all the fields from school_list, but don't want them all. 
+#we can limit what comes over, using dplyr
+#You must include the joining field -- in this case, school_id
+
+kvaxx2 <- left_join(kvaxx, 
+                    school_list %>% select(school_id, county, schooltype),
+                    by=c("school_id"="school_id"))
+```
+
+
+
+
+```{r}
+# limit to MMR ------------------------------------------------------------
+
+
+#Let's winnow down to just MMR so we can focus our analysis a bit
+#we'll use names() function to see which fields we want to put in a new dataframe
+names(kvaxx2)
+
+
+
+
+```
+
+
+```{r}
+#note how we're also going to rename a field on the fly
+k_mmr <-  kvaxx2 %>%
+  select(school_id, county, schooltype, disname, schname, enroll, complete_mmr,
+                                complete_pert_mmr, inprogress_mmr, inprogress_pert_mmr, co_mmr, co_pert_mmr,
+                                me_mmr, me_pert_mmr, 
+         district_type=school_type)  #this last one renames the school_type field on the fly
+```
+
+
+
+# Data cleanup
+```{r}
+
+#what problems do we need to deal with in this new k_mmr table?
+
+
+
+#YOUR TURN
+#Let's look at the enroll field
+#use dplyr to summarize the enroll field
+#arrange descending
+
+
+
+
+
+
+
+
+
+
+```
+
+
+
+
+```{r}
+
+#let's create a new field and populate it depending on what's in the old one
+#this uses case_when() function from dplyr
+#https://dplyr.tidyverse.org/reference/case_when.html
+
+
+k_mmr <-  k_mmr %>%  
+  mutate(enroll_new = case_when(enroll=='Enrollment < 5' ~ 0, 
+                                is.na(enroll) ~ 0,
+                                TRUE ~ as.double(enroll)))
+```
+
+
+
+
+
+
+
+
+
+```{r}
+#Look to see if there are any records where enroll_new is NULL
+k_mmr %>%
+  filter(is.na(enroll_new)) %>%
+  select(school_id, enroll, enroll_new)
+```
+
+
+
+
+
+
+
+```{r}
+#Let's look at school type
+
+k_mmr %>% count(schooltype)
+
+#How about we clean that up, and a little extra in there -- identifying charter schools
+#MDE identifies charter schools with the district type="07"
+
+k_mmr %>% count(district_type)
+
+#Use case_when to populate a new field called "schooltype2" that 
+#says "charter" for ones where the district_type=="07", 
+#says "unknown" for those where schooltype is null   -- is.na(schooltype)
+#and transfers the contents of the schooltype field for all others
+
+
+k_mmr <- k_mmr %>% mutate(schooltype2= case_when(district_type=='07'~'charter',
+                                                 is.na(schooltype)~'unknown',
+                                                 TRUE~ schooltype))
+
+
+
+```
+
+
+# YOUR TURN
+#write a query to group by the schooltype2 column to see what is in there
+
+
+
+
+
+
+
+
+
+
+
+```{r}
+#Another nice thing to have would be a single column indicating if a school 
+#doesn't have a high enough vaccination rate
+#essentially we're going to put our data into buckets or groups, which will make our analysis easier
+#health experts say a "community" needs 90-95% vaccination rate to ensure "herd immunity"
+#so we'll say that anything below 90% lacks immunity
+
+k_mmr <- k_mmr %>%  
+  mutate(mmr_pocket = case_when(complete_pert_mmr>=.895 ~ 'sufficient',
+                                complete_pert_mmr>=0 & complete_pert_mmr<.895 ~ 'insufficient',
+                                enroll=='Enrollment < 5' ~ 'Enroll<5',
+                                is.na(complete_pert_mmr) ~ 'failed to report',
+                                TRUE ~ 'unk'))
+
+```
+
+
+# YOUR TURN
+#How many schools have insufficient vaccination rates? (hint: mmr_pocket)
+
+
+
+
+
+#How many private, charter and public schools do we have?
+
+
+
+
+# Cross tabs
+
+Kids in "pocket" schools by school type
+```{r}
+#this group_by table shows us the numbers, but doesn't put it in quite the right format
+k_mmr %>% group_by(schooltype2, mmr_pocket) %>%
+  summarise(kids = sum(enroll_new))
+```
+
+
+
+# Pivot wider (crosstab)
+```{r}
+#We can use pivot_wider to turn it into a crosstab
+
+#there are two ways to do this. One is to first make a dataframe of the grouped results
+
+grouped <-  k_mmr %>% group_by(schooltype2, mmr_pocket) %>%
+  summarise(kids = sum(enroll_new))
+
+
+
+#then to reference that in the pivot_wider query
+pivot_wider(grouped, names_from=mmr_pocket, values_from=kids)
+
+#syntax:
+#pivot_wider(df_name, names_from=x, values_from = x)
+
+
+
+```
+
+```{r}
+#We can also nest the query right into that spot where you put the table name
+
+pockets <-  pivot_wider(k_mmr %>%
+              group_by(schooltype2, mmr_pocket) %>%
+              summarise(kids = sum(enroll_new)), 
+            names_from = mmr_pocket, values_from = kids)
+
+
+pockets
+```
+
+
+
+
+
+#Percent of students attending "pocket" schools
+```{r}
+#add a new column that calculates percent insufficient for each school type
+#then select only key fields to display
+
+#note this is using the new data frame you created in the code chunk above
+
+#this uses the percent function from formattable package
+
+pockets %>% 
+  mutate(pctinsufficient = percent(insufficient/(insufficient+sufficient))) %>%
+  select(schooltype2, insufficient, sufficient, pctinsufficient)
+
+```
+
+
+
+# Make a chart
+```{r}
+#chart showing percentage of schools sufficient, insufficient, etc.
+
+#first make a data frame with the data the way we want
+mmr_chart <-  k_mmr %>%
+  group_by(mmr_pocket) %>%
+  summarise(schools=n()) %>%
+  mutate(pct = schools/sum(schools))
+
+
+```
+
+# Basics of a chart
+```{r}
+ggplot(mmr_chart, aes(x=mmr_pocket, y=pct)) + 
+  geom_bar(stat="identity")
+```
+
+
+
+# Make it pretty
+```{r}
+#now make a plot
+  ggplot(mmr_chart, aes(x = mmr_pocket, y = pct)) + 
+  geom_bar(stat = "identity", color="black",fill="#3e0045")+
+  scale_y_continuous(labels=percent_format()) +
+  labs(title = "MMR vaccination in kindergartens", 
+       subtitle = "2017-18",
+       caption = "Source: Minnesota Department of Health",
+       x="",
+       y="Percentage of schools")
+```
+

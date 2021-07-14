@@ -1,0 +1,315 @@
+---
+title: "Basic data cleaning in R"
+output: html_notebook
+---
+
+
+
+```{r}
+#load packages 
+library(tidyverse)
+library(ggthemes) #this will help make our charts look better
+library(janitor) #for data cleanup
+library(lubridate) #for working with dates
+library(stringr) #for data clean up
+```
+
+```{r}
+#Import our data
+#Note that our data is stored in a sub-directory called "data"
+
+deaths <- read_csv('./data/opiate_deaths.csv',
+                   col_types=cols(.default="c",
+                                  BIRTHDATE=col_date("%m/%d/%Y"),
+                                  DEATHDATE=col_date("%m/%d/%Y"),
+                                  INJURY_DATE=col_date("%m/%d/%Y"),
+                                  AGEYEARS="i")) %>%
+  janitor::clean_names()
+
+#the clean_names() function comes from the janitor package; 
+#it converts column names to lowercase and does other cleanup
+
+```
+
+
+# Splitting dates
+```{r}
+
+deaths <-  deaths %>% mutate(deathyr=lubridate::year(deathdate),
+                             deathmonth = month(deathdate))
+
+
+deaths %>% select(deathdate, deathyr, deathmonth)
+```
+
+# Stringr functions
+
+Use str_sub to grab portion of a string
+```{r}
+#This tells R to start on the 1st digit and look at 3 digits
+deaths %>% filter(str_sub(zip, 1, 3)=='565') %>%  group_by(zip) %>% summarise(count=n())
+```
+
+
+Trim leading and trailing spaces<br>
+A simple data cleaning step when standardizing records or in situations where you are going to join two tables, you should use this trim function to ensure that there aren't any leading or trailing spaces (which can be hard to see with the naked eye)
+```{r}
+#this will over-write the existing gender column, populating it with the same values
+#but also trimming leading or trailing spaces in the process
+
+deaths <-  deaths %>% mutate(gender = str_trim(gender))
+
+```
+
+The stringr package has other useful functions:<br>
+https://cran.r-project.org/web/packages/stringr/vignettes/stringr.html
+
+
+
+
+
+#Recoding variables
+We'll start with something simple. Let's convert the "F" to "Female" and "M" to "Male"
+```{r}
+#first let's look at the gender column again
+deaths %>% count(gender)
+```
+
+
+
+Using case_when to recode
+```{r}
+#we'll mutate to create a new column and we're going to overwrite our dataframe
+#plus a dplyr function called "case_when" (it's like an IF statement)
+
+deaths <-  deaths %>% 
+  mutate(gender_new = case_when( gender == 'F'  ~  'Female',
+                                 gender == 'M'  ~  'Male',
+                                 TRUE  ~  'unknown'))
+#the TRUE part is a catch all for any records that don't match your other parameters
+#it basically means "for anything else... then do this"
+
+#let's see how that turned out
+deaths %>% count(gender_new)
+```
+
+
+Dealing with "dirty" data<br>
+Let's look at the hispanicethnicity column
+
+```{r}
+#Notice the wide variety of results?
+deaths %>% group_by(hispanicethnicity) %>% summarise(count=n())
+```
+
+Uppercase all values
+```{r}
+
+#Let's start by converting all the values to uppercase to make it simpler
+#Like many things in R, there's more than one way to do this
+
+# the base R function called "toupper()" converts values to uppercase
+#deaths <-  deaths %>% mutate(hispanicethnicity= toupper(hispanicethnicity))
+
+#alternatively, you can use stringr function str_to_upper
+deaths <-  deaths %>% mutate(hispanicethnicity= str_to_upper(hispanicethnicity))
+
+#now let's see what we're dealing with
+deaths %>% count(hispanicethnicity)
+
+
+```
+
+# Populate a new column
+```{r}
+#We'll use str_starts() to find any records that start with "NOT" or start with "NON"
+# for all others, we'll transfer what is already in hispanicethnicity column
+#str_starts is from stringr package
+
+deaths <-  deaths %>% 
+  mutate(hispanic_new = 
+           case_when(str_starts(hispanicethnicity, "NOT") ~ 'NOT HISPANIC', str_starts(hispanicethnicity, "NON") ~ 'NOT HISPANIC', TRUE ~ hispanicethnicity))
+
+
+#let's see our new column
+
+deaths %>% 
+  group_by(hispanic_new) %>% 
+  summarise(numdeaths = n())
+
+```
+
+
+#How many people died by age group?
+Currently our data shows just the person's age (ageyears). To answer this question, we need to create a new column assigning each person to an age group. How you set your group depends on a variety of factors. 
+```{r}
+#First let's look at the distribution of the ages by plotting a basic histogram
+
+ggplot(deaths, aes(x=ageyears)) + geom_histogram()
+
+
+
+
+```
+
+```{r}
+# Change the width of bins (5 years in each bin) and add colors
+ggplot(deaths, aes(x=ageyears)) + 
+  geom_histogram(binwidth=5, color="white", fill="light blue")
+
+```
+
+
+
+
+Create an agegroup column
+```{r}
+
+deaths <-  deaths %>% 
+  mutate(agegroup = case_when(ageyears < 20 ~ '0-19',
+                              ageyears >=20 & ageyears < 35 ~ '20-34',
+                              ageyears >=35 & ageyears < 50 ~ '35-49',
+                              ageyears >=50 & ageyears <70 ~ '50-69',
+                              ageyears >=70 ~'70 and over',
+                              TRUE ~'unknown'))
+
+#Let's see what this new column looks like
+deaths %>% 
+  group_by(agegroup) %>% 
+  summarise( count = n() )
+```
+
+#Bar chart showing results
+```{r}
+#create a new dataframe, grouping our values by age group
+deaths_by_age <-  deaths %>% group_by(agegroup) %>% summarise(numdeaths = n())
+
+#plot this new data frame
+
+ggplot(deaths_by_age, aes(x=agegroup, y=numdeaths))+
+  geom_bar(stat="identity")
+```
+
+
+#YOUR TURN
+Insert a code chunk and write your own query that creates a column that has 3 groups: Under 18; 65 and over; Everybody else
+
+
+
+#YOUR TURN
+Make a bar chart to show how many deaths there were in each group?
+
+
+
+
+
+
+#Pivoting data
+```{r}
+
+#Try running this query. Wouldn't it be nice to have the years as columns?
+agegroup_by_year <-  deaths %>%
+  group_by(deathyr, agegroup) %>%
+  summarise(count=n())
+
+
+agegroup_by_year
+```
+
+#Years as the columns
+
+```{r}
+#pivot_wider is from Tidyverse
+#it converts long data to wide data
+#three arguments -- name of dataframe, names_from (which column has the labels for your new columns),
+#and values_from (which column has the values to go in your new columns)
+
+agegroup_wide <-  pivot_wider(agegroup_by_year, names_from=deathyr, values_from = count)
+
+
+```
+
+#Age groups as columns
+```{r}
+pivot_wider(agegroup_by_year, names_from=agegroup, values_from = count)
+```
+
+
+
+#Make that into a new dataframe
+And add clean_names()
+```{r}
+age_by_yr <-  pivot_wider(agegroup_by_year, names_from=agegroup, values_from = count) %>% clean_names()
+```
+
+#Add total and pct columns
+```{r}
+#Notice that you can use mutate to create more than one new column at the same time
+#and even use the first new column in your calculation for the second one!
+
+age_by_yr <-  age_by_yr %>%
+  mutate(total = x0_19 + x20_34 + x35_49 + x50_69 + x70_and_over,
+         pctUnder20 = (x0_19 / total)*100)
+
+
+
+```
+
+#YOUR TURN
+Display the year and pctUnder20; arrange by year
+```{r}
+#Notice that in the query above when I created the pctUnder20 variable, I made the U uppercase. 
+#So now I need to refer to it exactly that way when using it in subsequent queries
+
+
+```
+
+
+#Pivot Longer
+```{r}
+#we'll flip the agegroup2 data frame back to what it originally looked like
+#first argument is the column you want to retain on the far left
+#then you give it names for the new columns
+age_by_yr %>%  pivot_longer(-deathyr,  names_to = "myvariables", values_to = "myvalues" )
+```
+
+#Tell it to leave out a column (or more)
+```{r}
+
+#In the select portion, putting a minus sign in front of a column name will exclude it from the results
+#but it will keep any variables that you don't mention
+
+age_by_yr  %>% 
+  select(-pctUnder20, -total)%>%
+  pivot_longer(-deathyr,  names_to = "myvariables", values_to = "myvalues" )
+```
+
+
+#Regular expressions
+
+Find all the deaths involving Methadone
+```{r}
+#grepl (which is from BaseR) looks for the value anywhere in the column you specify
+#https://www.rdocumentation.org/packages/base/versions/3.6.1/topics/grep
+
+#Notice that I've put METHADONE in all capital letters because that is how it is stored in the data
+
+deaths %>%
+  filter(grepl("METHADONE", causea)) %>%
+  group_by(causea) %>%
+  summarise(count=n()) %>% 
+  arrange(desc(count))
+```
+
+#Make a new column
+
+```{r}
+#Now that we've found all those deaths involving methadone, let's make a new field
+#that says "yes" for those that have the word methadone in the causea columns
+#and put in "no" for all other records
+
+deaths <-  deaths %>%
+  mutate(methadone = case_when(grepl("METHADONE", causea)~'yes',
+                                                   TRUE~'no'))
+```
+

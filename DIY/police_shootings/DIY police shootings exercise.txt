@@ -1,0 +1,27 @@
+DIY- police shootings data
+
+The csv file called "mn_police_shootings" is a dataset compiled by the Minneapolis Star Tribune, primarily from Minnesota death certificate data, on people killed during encounters with police bewteen January 2000 and as of Oct 1, 2019. Use the pdf file called "record layout" to see the fields that are included.
+
+Download that file and record layout into a new directory on your computer.
+
+Open RStudio and start a new PROJECT in R and point it to the directory where you have saved the police shootings data file.
+
+Create an RNotebook file.
+
+Load libraries. 
+
+library(tidyverse)
+library(janitor)
+library(lubridate)
+
+
+Import the csv file to R.  Hint: You may need to deal with some date issues
+more info here about the date formats: https://readr.tidyverse.org/reference/parse_datetime.html
+
+
+Then see if you can answer these questions:
+1) How many deaths were there each year?
+2) What percentage were men versus women?
+3) How many involved the Minneapolis Police Department?
+4) How many of the people had a gun at the time of the incident?
+5) What percentage occurred in each region of the state? (Display the largest at the top)

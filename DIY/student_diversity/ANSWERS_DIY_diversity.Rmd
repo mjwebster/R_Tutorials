@@ -1,0 +1,125 @@
+---
+title: "ANSWERS_DIY_diversity"
+author: "MaryJoWebster"
+date: "October 11, 2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+```
+
+```{r}
+library(tidyverse)
+library(janitor)
+library(knitr) #needed for making tables in markdown page
+library(htmltools)#this is needed for Rstudio to display kable and other html code
+library(rmarkdown)
+library(kableExtra)
+library(formattable)
+
+
+#import student_race.csv
+race <-  read_csv('student_race.csv') 
+
+#make sure columns are formatted ok
+str(race)
+
+#import school_location.csv
+schools <-  read_csv('school_location.csv')
+
+#make sure columns are formatted ok
+str(schools)
+
+#what years does this data encompass?
+race %>% group_by(schoolyear) %>% summarise(count=n())
+```
+
+```{r}
+#Add new columns that have total non-white kids and pct of non-white kids
+#you could calculate this a couple ways -- one by adding up all the non-white groups
+#easier way might be to subtract the white male/female columns from the total students
+race <- race %>% mutate(nonwhite = totalstudents-(wht_female+wht_male),
+                        pct_nonwhite = percent(nonwhite/totalstudents))
+
+
+#How many schools had more than 95% students of color in 2018?
+
+race %>% filter(schoolyear==2018, pct_nonwhite>=.95) %>% select(schoolname, totalstudents, pct_nonwhite)
+```
+
+```{r}
+#Join the school location data frame to the race data frame
+race <-  inner_join(race, schools, by=c("schoolid"="schoolid"))
+```
+
+```{r}
+#In 2018, what percentage of students were non-white in each of the locations (stored in the location column)?
+#for this you need to filter your data to 2018
+#and then summarise the students of color and the total students columns
+#then mutate() to calculate the percentage
+
+race %>% filter(schoolyear==2018) %>% 
+  group_by(location) %>% 
+  summarise(tot_nonwhite = sum(nonwhite),
+            tot_all = sum(totalstudents)) %>% 
+  mutate(pct_nonwhite = percent(tot_nonwhite/tot_all))
+
+#Notice we appear to have some schools that don't have a location identified (NA)
+```
+
+
+
+
+```{r}
+#We're going to filter to just the schools in the Minneapolis public school district
+#but first we need to find out if those districtnames are consistent
+#here we can see that they are 
+
+#Start by doing a group_by query on the districtname and look for any inconsistencies
+race %>% group_by(districtname) %>% summarise(count=n()) %>% arrange(districtname)
+
+#Notice that we have some uppercase and some lowercase. That's an easy fix -- turning them all to uppercase
+
+race <-  race %>% mutate(districtname = toupper(districtname))
+
+#Next let's see what variations we have for Minneapolis
+race %>% filter(grepl('MINNEAPOLIS', districtname)) %>% group_by(districtname) %>% summarise(count=n())
+```
+
+```{r}
+#Let's make a new dataframe with jut the Minneapolis district schools
+#because we're not specifying any columns in a select(), it will return all the columns
+mpls <- race %>%   filter(grepl('MINNEAPOLIS', districtname))
+  
+
+#Run a query in the new data frame to see if the schoolnames are standardized
+#include the schoolid as part of the group_by so you can make sure there aren't 
+#schools with the same ID number, but different names (an indicator of a name change)
+mpls %>% group_by(schoolid, schoolname) %>% summarise(count=n()) %>% arrange(schoolid)
+
+
+```
+
+```{r}
+
+#How has the diversity changed over time in Minneapolis' public school buildings?
+#first winnow down our dataframe to only fields we want (note: i chose to make a new dataframe)
+mpls_pivot <- mpls %>% select(schoolname, schoolyear, pct_nonwhite)
+
+#Next you use pivot_wider off that new dataframe to pivot it out. You should have columns for all 5 years and one row for each school
+mpls_pivot <- pivot_wider(mpls_pivot, names_from = schoolyear, values_from=pct_nonwhite)
+
+#view
+mpls_pivot
+```
+
+
+```{r}
+#calculate the change (in percentage points) from 2014 to 2018
+mpls_pivot <-  mpls_pivot %>% mutate(pct_change = `2018`-`2014`)
+
+#Display the table, arranged in descending order
+mpls_pivot %>% select(schoolname, `2014`, `2018`, pct_change) %>% arrange(desc(pct_change))
+```

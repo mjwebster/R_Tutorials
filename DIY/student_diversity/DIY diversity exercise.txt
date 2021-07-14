@@ -1,0 +1,50 @@
+Exercise for DIY student diversity
+
+You have two data files. One called "student_race.csv" that has student demographic data for schools in Minnesota, over a five-year period. The other is "school_location.csv" that has location information about each school that isn't included in the data (this was compiled by the Minneapolis Star Tribune). In this exercise, you'll join the two files together to do some trend analysis, both over time and by location of schools.
+
+The student_race data is from the Minnesota Department of Education and there is a PDF called "record layout" that identifies the columns included here.
+
+1) Download the two files and the record layout to a directory on your computer
+2) Open RStudio and launch a new project, pointing to that directory
+3) Launch an RMarkdown page
+4) Load your libraries. 
+5) Import the student_race and school_location files
+
+6) Spend some time getting to know the student_race data table. What does each row represent? What pieces of information do you have about each school? What can we say about the demographics of the students attending this school?What years does this encompass?
+
+7) Add new columns with a) the total number of non-white students and b) the percentage of the total enrollment that the non-white students account for. Use the formattable package to format the pct column
+
+8) Run a query:  How many schools had more than 95% students of color in 2018? (note that even though your new percentage column is formatted as a percent, the computer still stores it as a decimal and you'll need to express it that way for filtering)
+
+
+9) Now let's join the school location data to the student race table. We'll keep using the same data frame name that we made for student race.
+
+
+10) Do a group by query to calculate the percentage of nonwhite students in each location, for the schoolyear 2018. Hint: You'll have to add up all the nonwhite students and add up all the "totalstudents" for each location, then use mutate() to get percentages. Don't forget to filter!
+
+
+
+11) For the next query, we're going to filter down to just the schools in the Minneapolis Public School District. But first we need to find out how the school district is identified in the data. 
+
+Start by looking at all the districtnames, using a group by query. Be sure to arrange by districtname. 
+
+Do you see any inconsistencies? (Look for mispellings, variations in lowercase/uppercase, missing name?)  Pay special attention to Minneapolis cause we need to be able to grab all those records.
+
+Fix any problems you find. 
+
+
+12) Create a new dataframe with only the Minneapolis public school district schools. Make sure the filter portion of the query is designed to grab all the variations of Minneapolis (Unless you cleaned it up in the lsat step). Hint: You might be able to use Grepl or list all the variations in your filter. Your new dataframe should have 209 records.
+
+				  
+13) Using that new data frame, run a group by query to see if the school names are standardized. Include the schoolid number in the group by query and arrange it in order by the schoolid. This will allow you to see if a school with the same ID has two different names (which is what we don't want)
+
+
+14) Next let's see how the diversity has changed over time at the Minneapolis schools. Use pivot_wider to make a new data frame that includes the school name and the percentage non-white for each year going across in the columns. Hint: you will need to winnow your dataframe down to the school name, the year and the percentage non-white before pivoting.
+(NOTE: you'll see that some schools don't have data for every year -- that's due to schools opening and closing)
+
+
+15) Add a new column calculating the change (by percentage points) from 2014 to 2018. Which school had the biggest growth in diversity? (Hint: subtract new from old).  Also note: if your column name has numbers at the beginning, you need to surround the column like this:  `name`
+
+
+
+				  

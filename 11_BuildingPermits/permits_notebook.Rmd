@@ -1,0 +1,301 @@
+---
+title: "Residential Building Permits Analysis"
+output: html_notebook
+---
+
+# Things we'll learn/practice
+* Importing a csv <br>
+* Grouping and summarizing <br>
+* Pivot_wider()  <br>
+* Making a new dataframe <br>
+* Adding new columns and populating them <br>
+* Basic charts with ggplot <br>
+* Cleaning up data with case_when <br>
+* String function str_starts() <br>
+
+```{r}
+#load libraries
+library(tidyverse)
+library(janitor)
+library(ggthemes)
+library(scales)
+
+#We are going to work with residential building permit data for the 7-county metro area in the Twin Cities. It shows how many units in each location and by the type of housing units
+#original source: https://stats.metc.state.mn.us/data_download/DD_start.aspx
+
+#import data
+permits <-  read_csv('DataDownload-residential_permit.csv') %>% clean_names()
+```
+
+# what years does the data cover?
+```{r}
+
+permits %>% group_by(year) %>% summarise(count=n())
+```
+
+
+# What cities does this include?
+```{r}
+permits %>% group_by(ctu_name) %>% summarise(count=n())
+```
+
+# Let's clean up those names
+There are some strange city names because several cities cross county boundaries
+```{r}
+
+#we'll use a function from the stringr package called "str_starts" to find the ones that start with the same name. I've hunted down all the cities that are problematic
+
+# let's test this with just one city first to see if it works
+
+permits %>% filter(str_starts(ctu_name, 'White Bear')) %>% group_by(ctu_name) %>% summarise(count=n())
+
+# notice that 'White Bear' returns one we don't want to change
+# Try changing it to 'White Bear Lake'
+
+```
+# Create a new column
+```{r}
+#Now we can combine str_starts with a case_when statement to fix all the problem ones
+#this creates a new column (called "city_new") and populates it depending on what it finds
+#case_when is very much like an IF statement in Excel
+
+#here's how to read it:
+# if ctu_name starts with 'Chanhassen' set city_new to 'Chanhassen'
+
+#The TRUE line at the end is how you tell it to handle all the remaining cases (in this case, all the cities that don't need to be fixed)
+
+permits <-  permits %>%
+  mutate(city_new = case_when(str_starts(ctu_name, 'Chanhassen')~'Chanhassen',
+                              str_starts(ctu_name, 'Blaine')~'Blaine',
+                              str_starts(ctu_name, 'Hastings')~'Hastings',
+                              str_starts(ctu_name, 'Dayton')~'Dayton',
+                             str_starts(ctu_name, 'Spring Lake Park')~ 'Spring Lake Park',
+                             str_starts(ctu_name, 'St. Anthony')~'St. Anthony Village',
+                              str_starts(ctu_name, 'White Bear Lake')~'White Bear Lake',
+                              str_starts(ctu_name, 'Shakopee')~'Shakopee',
+                              TRUE~ ctu_name))
+
+
+
+```
+
+# How many units built in each city in 2019?
+```{r}
+permits %>%
+  filter(year==2019) %>% 
+  group_by(city_new) %>%
+  summarise(units = sum(quantity)) %>% 
+  arrange(desc(units))
+```
+
+
+
+
+# What housing types does it count?
+```{r}
+permits %>% group_by(housing_type_desc) %>% summarise(count=n())
+```
+
+# Notice we have some strangeness in the housing types
+Let's see if there's a pattern by year
+```{r}
+permits %>% group_by(year, housing_type_desc) %>% summarise(count=n())
+```
+
+# how many housing units were built each year?
+Note that previously we were counting how many records there were
+```{r}
+permits %>% group_by(year) %>% summarise(units = sum(quantity))
+```
+
+
+
+
+# It's hard to see the pattern like that
+Let's try pivoting the data into a crosstab
+```{r}
+#to make this simpler, let's first make a new dataframe to work from
+
+temp <-  permits %>% group_by(year, housing_type_desc) %>% summarise(count=sum(quantity))
+
+
+#pivot_wider is part of tidyverse (the tidyr package)
+#you tell it the name of the data frame, which column you want to pivot, and which column contains the values you want to display
+pivot_wider(temp, names_from=housing_type_desc, values_from=count)
+```
+
+```{r}
+#let's make that a dataframe, but this time use the abbreviation (housing_type) for shorter column names,  and then also have it clean up the column headers
+#notice that instead of making a "temp" table, I'm doing it all in one swoop
+
+permits_by_year <-  pivot_wider(permits %>% group_by(year, housing_type) %>% summarise(count=sum(quantity)), names_from=housing_type, values_from=count) %>% clean_names()
+
+
+#view our new table
+permits_by_year
+```
+
+# Replace NULLs
+```{r}
+#this code will replace all the NULLS in the entire table with a 0 (use with caution)
+
+permits_by_year <-  permits_by_year %>% mutate_all(~replace(., is.na(.), 0))
+
+
+# we need to do this because we can't add up the columns if there are NULLs
+```
+
+# Add a total column 
+```{r}
+#This uses BaseR
+#it's the most simple approach since we want to add columns 2 through 8
+
+#this uses the apply function. 
+#You need to give it the dataframe name, followed by the columns
+#in this example we'll use the index numbers to identify the range of columns
+# [,2:8]  is how you tell it to add the columns 
+# if you did [2:8,] it would add the rows 2 through 8 together
+# the 1 is how you tell it to apply it across columns 
+# the word "sum" is the function you want to apply
+
+permits_by_year$total <- apply(permits_by_year[,2:8],1,sum)
+
+
+```
+
+# What percentage of new units built were single-family?
+```{r}
+#"sfd" represents the detached single-family homes
+#this time we'll use the tidyverse approach to adding a new column
+
+permits_by_year <-  permits_by_year %>% mutate(pct_sfd = sfd/total)
+
+```
+
+# Make a line chart of single-family units built each year
+```{r}
+
+
+ggplot(permits_by_year, aes(x=year, y=sfd)) + 
+  geom_line(stat="identity", color="blue", size=1.5)+
+  scale_x_continuous(name="Year", breaks=seq(1970, 2019, 5))+  #this sets the X axis labels
+  scale_y_continuous(name="Units", breaks=seq(0, 15000, 2000), limits=c(0, 15000))+
+  
+  theme_hc() +  #this is a theme from ggthemes to set fonts, appearance, etc
+  labs(title = "Single-family detached units", 
+       subtitle = "1970 to 2019")
+
+ggsave( "sfd_by_year.jpg", width=8, height=5, units="in", dpi="print")
+
+
+#breaks is telling it where to start and stop and how many units to go
+# for example, the Year on the x axis is only displaying every 5th year
+# the y axis is going up in increments of 2000
+# limits is needed to set the bottom and top of the Y axis 
+
+```
+
+# Percent single-family chart
+```{r}
+ggplot(permits_by_year, aes(x=year, y=pct_sfd)) + 
+  geom_line(stat="identity", color="blue", size=1.5)+
+  scale_x_continuous(name="Year", breaks=seq(1970, 2019, 5))+  #this sets the X axis labels
+  scale_y_continuous(name="Percent single family", limits=c(0,1), labels=scales::percent)+
+  
+  theme_hc() +  #this is a theme from ggthemes to set fonts, appearance, etc
+  labs(title = "Percent of total units that were single-family detached", 
+       subtitle = "1970 to 2019")
+
+
+#limits is needed to get a 0 base on the Y axis; because the data is stored as a decimal, the highest it could go is 1 
+# the scales package has a percent function to display the Y axis labels as percent
+```
+
+# How many multi-family units were built each year?
+```{r}
+#this is a bit harder because in 2004 they changed the definitions of the codes
+# previously it was mf3 and dup; now it's mf5 and dtq (duplex, triplex, quad)
+# the only way to have comparable numbers across years is to add together duplexes and higher
+
+#we'll create a new column adding together the 4 columns
+#then we'll create another new column calculating the percentage of total
+permits_by_year <-  permits_by_year %>% mutate(two_plus = dup + mf3 + dtq + mf5,
+                                               pct_two_plus = two_plus/total)
+
+
+
+
+```
+
+# Chart the percentage of multi-family units built each year
+Make this one a bar chart
+
+```{r}
+ggplot(permits_by_year, aes(x=year, y=pct_two_plus)) + 
+  geom_bar(stat="identity", color="black", fill="orange")+
+  scale_x_continuous(name="Year", breaks=seq(1970, 2019, 5))+  #this sets the X axis labels
+  scale_y_continuous(name="Percent multi-family", limits=c(0,1), labels=scales::percent)+
+  
+  theme_hc() +  #this is a theme from ggthemes to set fonts, appearance, etc
+  labs(title = "Percent of total units that were multi-family", 
+       subtitle = "1970 to 2019")
+```
+# Pivot longer
+
+```{r}
+#this is the opposite of pivot_wider()
+#it allows you to take wide data and normalize it (or make it long)
+# I find that I use pivot_wider more often but pivot_longer is sometimes necessary in order to make charts. ggplot prefers normalized data. 
+
+# so let's flip the permits_by_year back to a long version
+# the syntax is a bit different
+
+#in this case we also need to limit down to just the original fields
+# we can't leave those percentages in there
+# even if you're not doing that, always put the name of the dataframe first, followed by a pipe
+# then do the pivot longer
+# the first argument in pivot_longer is the column (preceded by a minus sign) that you want 
+# as the far-left column
+#then you create column names 
+
+
+permits_longer <-  permits_by_year %>% select(year, dup, mf3, mf5, dtq, sfd, th, adu) %>% pivot_longer(-year, names_to="unit_types", values_to="total_units")
+
+
+
+
+```
+
+
+```{r}
+
+# let's create a new column that groups these into multi-family and single-family
+
+permits_longer <-  permits_longer %>% mutate(type_new = case_when(unit_types %in% c("dup", "mf3", "mf5", "dtq") ~ 'mf',
+                                                                  unit_types=='sfd' ~ 'sf',
+                                                                  TRUE ~ 'other'))
+
+# then we need to group that into a new table to use for a chart
+permits_longer_chart <-  permits_longer %>% group_by(year, type_new) %>% summarise(units= sum(total_units))
+```
+
+
+```{r}
+
+# this sets the "factor order" of the values in the type_new column
+# you need to have a set order in order to set the labels and color values in the code below
+permits_longer_chart$type_new <-  factor(permits_longer_chart$type_new, levels=c("sf", "other", "mf"))
+
+
+# make a multi-line chart with one line for each group
+# color codes are from colorbrewer2.org
+
+ggplot(permits_longer_chart, aes(x=year, y=units, color=type_new))+
+  geom_line(stat="identity", size=1)+
+   scale_color_manual(values = c("#a6cee3",  "#b2df8a", "#1f78b4"), labels=c("Single-Family", "Other", "Multi-family")) +
+  scale_y_continuous(name="Units", breaks=seq(0, 15000, 2000), limits=c(0, 15000))+
+  theme_hc()+
+    labs(title = "Number of units built by type", 
+       subtitle = "1970-2019")
+```
+
