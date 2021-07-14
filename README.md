@@ -5,7 +5,9 @@ They are designed to walk you through data that is mostly pre-written, but then 
 
 
 # Downloading:
-Under each tutorial folder, you'll find one or more items to download. The ones where you see a "data" folder and materials in that folder should be set up on your computer with the same directory structure (i.e. that "data" is a sub-folder of the one where you are storing the script file). 
+You can download all the tutorials at once by clicking on the green "Code" button and choosing "Download zip."  Then unzip the files and you'll have separate directories and all the correct sub-directories that you need to do these tutorials. 
+
+Alternatively, if you want to download each tutorial one and a time, you'll have to be sure to download all the files in that folder. Some has a sub-folder called "data." When you download, make sure it still has this structure.
 
 
 # 1- Setting up R
