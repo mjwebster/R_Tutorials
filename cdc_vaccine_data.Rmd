@@ -1,0 +1,116 @@
+---
+title: "CDC vaccine data - NICAR22"
+output: html_notebook
+---
+
+
+```{r}
+library(tidyverse)
+library(janitor)
+library(MMWRweek)
+library(RSocrata)
+
+```
+
+
+```{r}
+#data source: https://data.cdc.gov/Vaccinations/COVID-19-Vaccinations-in-the-United-States-Jurisdi/unsk-b7fc
+
+# Set up required before you can run this
+# First sign up for CDC Socrata account here: https://data.cdc.gov/signup. 
+#Then follow these directions to get an app token: https://dev.socrata.com/docs/app-tokens.html
+
+#Install the token, your email and the password into REnviron as follows.
+# this assumes you have the usethis package installed (which was needed for tidycensus)
+#if it's not yet installed, uncomment the next line of code and run it:
+# install.packages("usethis")
+
+
+# In the Console area type:   usethis::edit_r_environ()
+
+# replace the x's below with the appropriate information and then paste that (without the comment hashtag) into REnviron file
+#cdc_token="xxx"
+#cdc_pw = "xxx"
+#cdc_email ="xxx"
+
+# Close RStudio and restart
+
+
+
+
+```
+
+```{r}
+#this code should work just fine as long as you set your Renviron variables to match as shows here (i.e. "cdc_token" in all lowercase)
+
+vax_download <- read.socrata(
+  "https://data.cdc.gov/resource/unsk-b7fc.json",
+  app_token = Sys.getenv("cdc_token"),
+  email     = Sys.getenv("cdc_email"),
+  password  = Sys.getenv("cdc_pw")
+) 
+```
+
+
+```{r}
+
+# Notice all the data comes down as character except the date field
+str(vax_download)
+```
+
+
+```{r}
+
+# here's how to fix the formatting problems after the data comes in
+
+vax <-  vax_download %>% 
+  mutate_at(vars(4:80), as.numeric) %>%   # this converts columns 4 through 80 to numeric
+  mutate(date = as.Date(date), mmwr_week=as.numeric(mmwr_week)) # this converts the date field and the mmwr_week field accordingly
+
+
+
+```
+
+
+
+# Apply MMWR year
+
+```{r}
+# The CDC does all it's weekly reporting based on MMWR weeks
+#The first day of any MMWR week is Sunday. MMWR week numbering is sequential beginning with 1 and
+#incrementing with each week to a maximum of 52 or 53. MMWR week #1 of an MMWR year is the first week of
+#the year that has at least four days in the calendar year. For example, if January 1 occurs on a Sunday, Monday,
+#Tuesday or Wednesday, the calendar week that includes January 1 would be MMWR week #1. If January 1
+#occurs on a Thursday, Friday, or Saturday, the calendar week that includes January 1 would be the last MMWR
+#week of the previous year (#52 or #53). Because of this rule, December 29, 30, and 31 could potentially fall into
+#MMWR week #1 of the following MMWR year. 
+
+#this uses the MMWRweek package to assign the month, week and day from each date
+# the MMWRweek package creates a whole new dataframe first
+
+
+#generate MMWR year, week, day variables
+mmwrdates_vax <- MMWRweek(vax$date)
+
+#join the year, week, day variables to the vax data
+#NOTE: the CDC data has a field called "mmwr_week" (note the R is in the first part) and this just
+#added the week, day and year. The new week is "mmw_rweek" 
+vax <- cbind(vax, mmwrdates_vax) %>% clean_names() 
+
+
+#this creates a lookup table with the start and end dates of each MMWR week so you can add them back to the data (next step)
+week_start_end <-  vax %>%
+  group_by(mmw_ryear, mmw_rweek) %>%
+  summarise(start_date = min(date),
+            end_date = max(date),
+            .groups='drop')
+
+
+
+# apply the start_date and end_date to vax table by  joining
+ vax <-  left_join(vax, week_start_end %>% select(mmw_ryear, mmw_rweek, start_date, end_date), by=c("mmw_ryear"="mmw_ryear", "mmw_rweek"="mmw_rweek" ))
+ 
+
+```
+
+
