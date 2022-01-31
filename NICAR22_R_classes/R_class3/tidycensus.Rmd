@@ -1,0 +1,344 @@
+---
+title: "Tidycensus - NICAR22"
+output: html_notebook
+---
+
+
+# Getting set up at home
+```{r}
+
+# Step 1: 
+# Register for a Census API key: 
+# https://api.census.gov/data/key_signup.html
+
+
+# Step 2:
+# Install usethis package (uncomment and then run the next line of code)
+# install.packages("usethis")
+
+# Step 3: 
+# Load your Census API key into REnviron
+# In the Console area type:   usethis::edit_r_environ()
+
+#it will bring up a new script  where you should put this
+# (take off the hashtag at the front and insert your API key in the designated spot)
+
+# CENSUS_API_KEY="yourAPIkeygoeshere"
+
+
+
+
+# Step 4:
+# Close RStudio and restart
+
+
+#be sure to comment out the install packages sections of this code chunk before you continue running this script
+```
+
+
+
+
+```{r, warning=FALSE, message=FALSE}
+
+
+library(tidycensus)#for getting census data via API
+library(tidyverse)
+library(janitor)
+library(sf)#for exporting shapefile
+library(purrr)#this is installed as part of tidyverse
+options(scipen=999)  #prevents scientific notation
+
+
+############################################
+#this loads your census API key from your REnviron file
+
+census_api_key(Sys.getenv("CENSUS_API_KEY"))
+
+
+
+      
+  #We're going to use an R Package called TidyCensus to interact with the API
+      
+#Tidycensus
+#https://walkerke.github.io/tidycensus/
+
+#Look at the Tidycensus documentation to see the various options
+      #key points -- use get_acs() for American Community Survey;
+            #use get_decennial() for 2010 or 2020 decennial census results
+        #note the syntax for the various geography levels, such as "state" to get state level
+      #or "us" to get national data
+      
+    
+
+    
+
+#We will need to tell the API:
+      #which census product (acs, decennial, etc)
+      #which year(s)
+      #what geography (sometimes this requires picking a state)
+      #What variable(s)
+      
+
+```
+
+#How to get a list of variables
+```{r}
+      
+      
+#the next code chunk below will generate a list of the tables and variables
+      #doing this is optional, but sometimes it helps
+      #alternatively you can view the variables online. Select the dataset you want from this page: https://www.census.gov/data/developers/data-sets.html.  Then look for "detailed table variables" link
+      
+#this particular code is asking for the 2019 1-year American community survey data
+#it's storing it in a new data frame and then I've set it to write out to csv
+
+    acs_variable_list <- load_variables(2019, "acs1", cache = TRUE)
+    
+#uncomment the code below to export a list of variables to look at it in Excel
+    #write.csv(acs_variable_list, 'acs_variable_list_2019.csv', row.names = FALSE)
+```
+
+
+#A simple API call
+Median household income for states
+```{r, message=FALSE, error=FALSE, warning=FALSE}
+ 
+#We're going to get median household income from table B19013
+# from the ACS 1 year data, for 2019
+#geography indicates we're getting state level
+#because we haven't specified a state, it will give us all states plus D.C. and Puerto Rico
+
+
+#notice that we are assigning it to a new dataframe
+   hhincome_2019 <- get_acs(geography = "state", 
+                     year=2019,
+                     survey="acs1",
+              variables = c(medincome ="B19013_001"))
+
+#notice that I've named my variable "medincome". That's optional
+#You could simply put    c("B19013_001")
+
+
+#view our results
+hhincome_2019
+```
+
+
+
+
+#Change the geography
+```{r}
+#Next let's change the geography to get county level
+#again, since we're not specifying a state, it gives us all counties in the US
+
+  hhincome_county <- get_acs(geography = "county", 
+                     year=2019,
+                     survey="acs1",
+                     variables = c(medincome = "B19013_001"))
+```
+
+#Limit to one state
+```{r}
+#Now we'll just get the counties from one state
+#Note that it will only return the counties that have valid results
+#The 1 year ACS only has data for geographies with 65,000 or more people
+
+
+   hhincome_mn_county <- get_acs(geography = "county", 
+                     year=2019,
+                     survey="acs1",
+                     state="MN",
+                     variables = c(medincome = "B19013_001"))
+
+#View results
+hhincome_mn_county
+```
+
+
+
+
+
+#Add more variables
+```{r}
+    hhincome <- get_acs(geography = "state", 
+                     year=2019,
+                     survey="acs1",
+              variables = c(all = "B19013_001",
+                            black = "B19013B_001",
+                            indian = "B19013C_001",
+                            asian = "B19013D_001",
+                            other = "B19013F_001",
+                            multi = "B19013G_001",
+                            white_nh = "B19013H_001",
+                            hispanic = "B19013I_001"))
+
+hhincome
+```
+
+
+#Wide vs Tidy output
+```{r}
+#Notice in the last query, the results came back with one row for each estimate
+#meaning there were multiple rows for each state
+#That is considered "tidy" output; and that is the default of TidyCensus
+#If you want, you can specify wide output
+    hhincome_wide <- get_acs(geography = "state", 
+                     year=2019,
+                     survey="acs1",
+              variables = c(all = "B19013_001",
+                            black = "B19013B_001",
+                            indian = "B19013C_001",
+                            asian = "B19013D_001",
+                            other = "B19013F_001",
+                            multi = "B19013G_001",
+                            white_nh = "B19013H_001",
+                            hispanic = "B19013I_001"),
+              output="wide")
+
+hhincome_wide
+#Notice that now we just have 52 rows and the variables are running across in columns
+#The ones labeled with an E on the end are estimates; the ones with M are margin of error values
+
+```
+
+
+
+
+#Get multiple years at the same time
+```{r}
+
+#The previous queries have only pulled a single year of data at one time
+#and they used the most basic syntax for TidyCensus
+#Now we're going to use the map_dfr() function from the purrr package to write a loop
+#It will loop through the years that we've told it to pull
+
+
+
+
+#This time we'll grab from table B03002 - Hispanic or Latino orgin by race
+#we'll also assign our variables to a list of values (note that we reference it in code below)
+  my_variables <-  c(totpop = "B03002_001",
+                            nothispanic = "B03002_002",
+                            nh_whitealone = "B03002_003",
+                            nh_black = "B03002_004",
+                            nh_indian = "B03002_005",
+                            nh_asian = "B03002_006",
+                            nh_pacisl = "B03002_007",
+                            nh_other = "B03002_008",
+                            nh_multi = "B03002_009",
+                            hispanic = "B03002_012") 
+
+#Next we'll create a list of the years that we want to pull
+    #The API only goes back to 2012
+years <- lst( 2018, 2019)
+
+#Below is the loop code wrapped around the standard TidyCensus syntax
+#Note that we're getting state level
+#from ACS 1 year
+#I've also added a clean_names() function from janitor package 
+
+states_diversity <-  map_dfr(
+  years,
+  ~ get_acs(
+    geography = "state",
+    variables = my_variables,
+    year = .x,
+    survey = "acs1"
+    ),
+  .id = "year"
+  ) %>% clean_names()
+
+
+#Let's see what we have for Georgia
+states_diversity %>% filter(name=='Georgia')
+
+```
+
+
+
+# Get decennial data
+
+```{r}
+
+#find the variables that are available 
+census2020_list <- load_variables(2020, "pl", cache = TRUE)
+
+
+#populate a list with the variables you want
+race_vars <-  c(totpop ="P2_001N",
+                hispanic = "P2_002N",
+                whitenh = "P2_005N",
+                blacknh = "P2_006N",
+                amindnh = "P2_007N",
+                asiannh = "P2_008N",
+                pacislnh = "P2_009N",
+                othernh ="P2_010N",
+                tworacenh = "P2_011N")
+
+
+
+#make the API call - choose the geography and output
+race_eth_state<-  get_decennial(geography = "state", variables = race_vars, year = "2020", output="wide")
+
+
+```
+
+
+
+
+
+
+#Add geometry to make maps
+```{r}
+#we're going to switch to the 5-year ACS 
+#so we can get data for all counties in Minnesota
+#pulling the median household income variable
+#Note: geometry = TRUE  (this pulls the TIGER file)
+
+mn_income <- get_acs(geography = "county", 
+                     year=2019,
+                     survey="acs5",
+              variables = c(medincome = "B19013_001"), 
+              state = "MN",
+              geometry = TRUE) %>%
+  clean_names()
+```
+
+#Map with ggplot
+```{r}
+#https://walkerke.github.io/tidycensus/articles/spatial-data.html
+#https://www.r-spatial.org/r/2018/10/25/ggplot2-sf.html
+
+#You can make a simple map with ggplot
+#See the links above for more details
+#we're not going to spend any more time on this other than to show that it's possible
+
+
+mn_income %>% 
+    ggplot(aes(fill = estimate)) + 
+  geom_sf(color = NA) + 
+  scale_fill_viridis_c(option = "magma") 
+```
+
+```{r}
+#Export the ggplot map you just made
+ggsave("my_ggplot_map.png")
+```
+
+
+
+
+Make an interactive map
+tutorial: https://juliasilge.com/blog/using-tidycensus/
+this uses  leaflet package
+
+
+
+#EXport data to a shapefile
+```{r}
+#uses sf package
+#export the data file out as a shapefile for us in ArcGIS/QGIS, etc
+#Notice that we're grabbing the underlying data frame, not the map that we made above
+st_write(mn_income, "mn_income_map.shp")
+```
+

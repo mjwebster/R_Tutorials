@@ -1,0 +1,365 @@
+---
+title: "Importing - NICAR22"
+output: html_notebook
+---
+
+
+
+```{r}
+library(tidyverse)
+library(janitor) #for cleaning the column names on import
+library(lubridate) #for working with dates
+library(stringr) #for data clean up
+library(formattable) #for displaying data (percents, dollars, etc)
+library(readxl)
+
+
+
+```
+
+
+
+# Import data
+```{r, include=FALSE}
+
+#Note that our data is stored in a sub-directory called "data"
+
+#let's start by just using a simple import to see if we can bring it in okay
+#this is Minnesota death certificate data where one or more opioids were identified as a cause of death
+
+deaths <- read_csv('./data/opiate_deaths.csv')
+
+
+```
+
+```{r, include=FALSE}
+
+#let's see what happened
+#look to make sure fields are formatted correctly
+#look at column names
+#notice that the results appear in the console
+
+str(deaths)
+```
+
+
+
+
+
+```{r}
+#Did you notice that everything is character format? 
+#that's going to be a problem for our date fields and anything we want stored as number (like ageyears)
+
+#we're going to use the col_types argument to ensure the dates get stored as dates
+#and that the ageyears column is stored as an integer
+#this particular syntax for setting field formats during the import is specific to the readr package
+#syntax will be different if you are bringing in an Excel file or other format
+
+deaths <- read_csv('./data/opiate_deaths.csv',
+                   col_types=cols(.default="c",  #this is setting all other columns to character
+                                  BIRTHDATE=col_date("%m/%d/%Y"),
+                                  DEATHDATE=col_date("%m/%d/%Y"),
+                                  injury_date=col_date("%m/%d/%Y"),
+                                  ageyears="i"))  #this is setting ageyears column to integer
+
+#more info here about the date formats: https://readr.tidyverse.org/reference/parse_datetime.html
+
+```
+
+
+
+
+# Review column names
+```{r , include=FALSE}
+#this is a Base R function that displays the columns in a data frame
+#notice that the results appear in the console
+
+names(deaths)
+```
+
+# Ugh- column names
+```{r}
+#If you have a data file that has a lot of problematic column names -- for example, capital letters or proper case or spaces or symbols -- you can use the clean_names() function from janitor package to clean them up. 
+
+#You can run this after importing (which we'll do here) or tack it on with the same code for the import 
+
+deaths <-  deaths %>% clean_names()
+```
+
+
+
+
+
+
+
+
+
+
+# Appending data
+The data we have only goes through 2018, but we have a 2019 file that matches
+
+```{r}
+#start by importing that 2019 file. We'll use the same syntax as we did above
+#note-- the column names in the csv file are already in lowercase, so the col_types code is changed to reflect that
+#I've also tacked on the clean_names() function just in case (this is how I always do my imports)
+
+deaths2019 <- read_csv('./data/opiate_deaths_2019.csv',
+                   col_types=cols(.default="c",  #this is setting all other columns to character
+                                  BIRTHDATE=col_date("%m/%d/%Y"),
+                                  DEATHDATE=col_date("%m/%d/%Y"),
+                                  injury_date=col_date("%m/%d/%Y"),
+                                  ageyears="i")) %>% 
+  clean_names()
+
+```
+
+```{r}
+#notice that both our dataframes have 33 variables (or columns). That's good.
+#let's just make sure they match 
+
+#run this chunk of code and then the next chunk immediately after
+
+names(deaths)
+```
+
+
+```{r}
+names(deaths2019)
+```
+
+# Fix names
+```{r}
+#notice that middle and maiden appear differently in the 2019 data
+# we need them to match the older data
+#so we can use the rename() function as part of the import to set them to match
+
+deaths2019 <- read_csv('./data/opiate_deaths_2019.csv',
+                   col_types=cols(.default="c",  #this is setting all other columns to character
+                                  BIRTHDATE=col_date("%m/%d/%Y"),
+                                  DEATHDATE=col_date("%m/%d/%Y"),
+                                  injury_date=col_date("%m/%d/%Y"),
+                                  ageyears="i")) %>% 
+  clean_names() %>% 
+  rename(middlename= middle,
+         maidenname=maiden)  #notice syntax is to put the "new" name first and the old name second
+```
+
+
+
+# Put the files together using bind_rows()
+```{r}
+#dplyr has a function called bind_rows() that appends files together
+# it's more forgiving than the Base R function because you CAN put together files that have differing numbers of columns, but still get them all in the output
+
+#https://dplyr.tidyverse.org/reference/bind.html
+
+deaths_new <-  bind_rows(deaths, deaths2019)
+
+
+#rm(deaths)
+```
+
+More on appending: https://youtu.be/mdIgwpkB9zI
+
+
+
+
+# Export as a csv
+```{r}
+# we might want to send that newly combined file back to our directory for long-term keeping
+# if you don't use row.names=FALSE, it will add an extra column with a unique ID added to each row
+# this will put it back in the data sub-directory
+
+
+write.csv(deaths_new, './data/deaths_2006_2019.csv', row.names=FALSE)
+```
+
+
+
+
+
+
+
+
+
+
+
+
+# Importing from Excel
+
+```{r}
+#When importing from Excel you have the option to specify a particular sheet or particular range,
+#which is often necessary when agencies give us files with multiple sheets and a lot of notes or extraneous stuff on the edges
+
+# NOTE: this won't work if the Excel file is open
+
+#highly recommend always using clean_names()
+
+#sheet = District
+#range = A2:BH6541
+
+district_enroll <- read_xlsx('./data/enrollment_public_file_2015.xlsx', sheet="District", range="A2:BH6541") %>% clean_names()
+```
+
+
+# Filter rows and/or columns on the way in
+
+```{r}
+#this is true regardless of what function your using or the format
+# notice that it uses the pipe to connect operations
+
+hennepin_enroll <- read_xlsx('./data/enrollment_public_file_2015.xlsx', sheet="District", range="A2:BH6541") %>%
+  clean_names() %>% 
+  filter(county_name=='Hennepin', grade=='All Grades') %>%
+  select(data_year, district_name,  grade, total_enrollment)
+
+```
+
+
+
+
+# Practice getting a different sheet
+```{r}
+#sheet= State
+#range= A2:BH17
+
+#assign it to a dataframe called "state_enroll"
+
+
+
+```
+
+
+
+
+
+
+
+# Excel file with formatting problems
+```{r}
+# open this up in Excel first and look at numproficient and the last two date columns 
+# how something is formatted in Excel can be important 
+
+
+testscores <-  read_xlsx('./data/import_sample.xlsx')
+```
+
+
+```{r}
+#let's look at how R guessed on the field types
+str(testscores)
+
+#notice that it brought numproficient in as number, even though it was formatted as text in Excel
+#notice the last two columns. POSIXct is simply R's version of a date
+```
+
+
+The readxl package works a little differently than readr. For example, if you want to override the column types that it guesses on the way in you need to use this syntax:
+
+This will set all the columns to text:
+df<-  read_xlsx('datafile.xlsx', col_types="text") 
+
+or to set each column you have to list out the types:
+
+df <-  read_xlsx('datafile.xlsx', col_types=c("text", "text", "guess", "skip", "numeric", "date"))
+
+```{r}
+ testscores <-  read_xlsx('./data/import_sample.xlsx', col_types=c("text", "text", "text", "text", "numeric", "text", "numeric", "numeric", "numeric", "numeric", "numeric", "numeric", "text", "text", "date", "date"))
+
+str(testscores)
+```
+
+# Pulling data from a URL
+
+```{r}
+# We're going to use COVID case and death data compiled by the New York Times
+# we'll pull it directly from their live github page
+# Documentation: https://github.com/nytimes/covid-19-data
+
+
+#turn the URL into a variable that we can reference in following code
+url <- "https://raw.githubusercontent.com/nytimes/covid-19-data/master/us-counties.csv"
+
+
+#use the read_csv() function from readr package (tidyverse) to import the data from the URL and turn it into a dataframe (Note: BaseR has a function called read.csv that works slightly differently)
+# the filter at the end is optional 
+
+covid <- read_csv(url) %>% filter(state=='Georgia')
+
+```
+
+
+# Pivot wider
+
+```{r}
+# The COVID data is in what's known as "long" format (also called "tidy") 
+# What if we wanted to see the cases for each of the last 7 days going across as the columns, with each county as a row
+
+#let's start by limiting our data to the last 7 days
+# I'm going to start by setting a variable that will automatically get the last 7 days, regardless of when you run this
+
+most_recent_day <-  max(covid$date)
+one_week_earlier <-  add_with_rollback(most_recent_day, weeks(-1))
+
+
+#Next, we'll filter the data to just the records between those two dates
+
+covid_ga_past_week <- covid %>% filter(date>=one_week_earlier)
+
+
+# next we will use the pivot_wider() function from tidyverse to make a wide table based on cases
+
+pivot_wider(covid_ga_past_week %>% select(date, county, cases), names_from=date, values_from=cases)
+
+
+```
+
+```{r}
+pivot_wider(covid_ga_past_week %>% select(date, county, cases), names_from=date, values_from=cases) %>% 
+  clean_names() %>% 
+  mutate(pct_chg = (.[[9]] - .[[2]])/.[[2]]) 
+
+# in the mutate line we are referencing the index numbers of the columns
+#  .[[9]]  represents the 9th column
+#  .[[2]] represents the 2nd column
+# by doing this you can run this code into the future and it will continue to always work on the most recent week no matter what the date are
+```
+
+```{r}
+# you can store the results in a new dataframe by tacking a name and the assignment operator on the front
+
+my_pivoted_table <-  pivot_wider(covid_ga_past_week %>% select(date, county, cases), names_from=date, values_from=cases) %>% 
+  clean_names() %>% 
+  mutate(pct_chg = (.[[9]] - .[[2]])/.[[2]]) 
+```
+
+
+
+# Pivot longer
+
+```{r}
+# The population estimates data we used in class 1 is a good example of "wide" data that you might want to pivot longer
+
+estimates <-  read_csv('./data/pop_estimates.csv') %>% clean_names()
+
+# pivot longer works best when you have one column that you want as the rows (ie. the county name) and then a bunch of columns of numbers that you want to end up in the same column. 
+# here the population estimate fields from each year are ideal to group together in one column
+# but we have a lot of pieces of information about each county
+# we can ditch those extra pieces of information in the selection portion
+# also note that I'm using a filter to just get the county level rows (eliminating the state rows)
+
+estimates_long <- estimates %>%
+  filter(sumlev==50, stname=='Georgia') %>%
+  select(-sumlev, -region, -division, -state, -county) %>%
+  pivot_longer(3:13, names_to="yr", values_to = "estimate", values_drop_na=TRUE)
+
+#then after getting rid of those columns, we are left with 13 columns. The first two are the state and county, so we tell it to pivot on columns 3 through 13. 
+# values_drop_na means that it will drop any rows that don't have any values; not going to be an issue with this dataset, but sometimes it is.
+#obviously it helps if the columns you want to pivot are all on the far right; if they aren't you might want to rearrange before doing this; can rearrange by making a new dataframe and listing the columns in select portion in the order you want them to appear
+
+
+
+
+
+```
+

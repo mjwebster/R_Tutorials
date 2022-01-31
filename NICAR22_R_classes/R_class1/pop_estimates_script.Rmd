@@ -1,0 +1,348 @@
+---
+title: "Intro to R- NICAR22"
+output: html_notebook
+---
+
+
+
+
+```{r}
+#If you want to run this on your own computer, you need to install the packages first (one time only)
+#uncomment this code on the next line to install the two packages
+#install.packages("tidyverse", "janitor")
+
+
+
+#load libraries
+#You need to load the libraries every time you run this code
+library(tidyverse)
+library(janitor)
+
+
+#To run a chunk of code in Notebook or RMarkdown, there are several options. One is to push the green arrow over in the upper right corner of this grey area. Another is to have your cursor anywhere in the grey area and use Control-Shift-Enter on your keyboard (or cmd-shift-enter on a Mac). You can also use the options in the Run pull-down menu at the top of the page. 
+
+# You have the option to run the entire chunk of code, or to highlight a line or two and only run that line or two. (to do just a line, keyboard shortcut is Control-Enter or Cmd-Enter on Mac)
+
+
+
+#How to turn on rainbow parentheses
+# Go to Tools >> Global Options >>> Code >>> Display (see the check box for rainbow parentheses)
+
+
+```
+
+
+# Practice running code with this
+```{r}
+3+4
+
+6+6
+```
+
+# Assignment operator
+
+Assignment operator (<-) is used to assign data to a data frame or to a variable (Keyboard shortcuts: Option+- on a Mac or Alt+- on Windows)
+
+```{r}
+
+#Here we're assigning something to a variable
+answer <-  3 +4
+
+other_answer <- "My first code"
+
+#practice using the assignment operator on your own by writing something below
+
+
+
+```
+
+
+
+
+# Import data
+```{r}
+#the syntax of an import is dependent on the type of file
+# this is a csv file, so we're going to use the read_csv function, which is from the readr package within tidyverse
+#the syntax might also need to be more complicated if you have a tricky file; we'll encounter that in the next lesson
+
+#notice that we are telling it to go to a sub-directory called "data" (./data/)
+
+pop <- read_csv('./data/pop_estimates.csv')
+```
+
+# Check how it came in
+```{r}
+# this is a base R function to look at the structure of the dataframe
+
+str(pop)
+```
+
+# Look at the field names
+```{r}
+names(pop)
+```
+
+R is case sensitive when referring to both the column/field names and the values in the data. The column names can be particularly problematic when writing code because it's hard to remember which ones were uppercase and which were lowercase and which were proper case. 
+The janitor package has a function called "clean_names()" that will fix this for you in one swoop.
+
+I generally tack this on to the end of my import every time. Let's just repeat the import and do that here.
+
+
+Pipe operator (%>%) is used in Tidyverse to connect actions. (Cmd+Shift+M on a Mac or Control+Shift+M on Windows).
+
+```{r}
+pop <- read_csv('./data/pop_estimates.csv') %>% clean_names()
+```
+
+
+# Insert a new code chunk and run the names() function again
+On Windows: Ctrl-Alt-I
+On Mac: Ctrl-Cmd-I
+Or use the menu in the upper right (to the left of "Run")
+
+
+
+
+
+
+
+
+
+
+
+
+
+# Basics of dplyr
+
+SELECT- use this to dictate which columns to display
+FILTER -- use this to filter to only certain records based on certain criteria
+GROUP_BY -- use this in conjunction with summarize to get summary data results; this is where you tell R what columns to "group" the data by
+SUMMARIZE -- use this with (or without) group_by to do math calculations, counting, summing, average, minimum, maximum, etc.
+ARRANGE -- use this to tell R what order to put the records in (sorting)
+MUTATE -- how you can add a new column or edit an existing one; or you can do additional calculations based on your summarized results
+
+
+```{r}
+pop %>% select(stname, ctyname, popestimate2018)
+```
+
+# Insert a new code chunk and have it display the state, county and popestimate2017
+
+
+
+
+
+
+
+
+
+# Filtering
+```{r}
+pop %>% filter(stname=='Georgia') %>% select(stname, ctyname, popestimate2018)
+```
+
+# Filtering by more than one thing
+```{r}
+# Notice that the results of our last query returns a state level record and the county records. 
+# Let's get rid of the state level record
+#in the data is a field called "sumlev". Records with "40" in this field are state. "50" are county
+#this column is numeric so we don't put quotes around the value
+
+#the comma in the filter statement indicates this is an "AND" situation. We want records that say Georgia in the stname field AND have 50 in the sumlev field.
+
+pop %>% filter(stname=='Georgia', sumlev==50) %>% select(stname, ctyname, popestimate2018)
+```
+
+
+
+
+# OR filtering
+```{r}
+#If we want to say we want Georgia records and Minnesota records, that's an "OR" situation because we're asking for information based on the same field.
+
+#there are a couple syntax options to do this. One is with a pipe, however this requires repeating the column name
+
+pop %>% filter(stname=='Georgia'  |  stname=='Minnesota') 
+
+
+# the other is using the %in% function. I've commented it out so it doesn't run both sets of code
+#pop %>% filter(stname %in% c("Geogia", "Minnesota"))
+```
+
+
+
+
+# Arrange
+```{r}
+# arrange is how you tell R to put the results in a particular order
+# use desc() wrapped around the column name within arrange() to have it go in descending order (largest to smallest or Z to A)
+# just use arrange(columname) alone if you want it in ascending order
+
+pop %>% filter(stname=='Georgia', sumlev==50) %>% select(stname, ctyname, popestimate2018) %>% arrange(desc(popestimate2018))
+```
+
+# Indenting code
+```{r}
+# when your code starts to get long, you might want to do indenting to make it easier to read
+# it's also okay to put extra spaces in your code to make it easier to read (notice I have an extra space after the comma in the filter section)
+# to indent code, put your cursor BEHIND a pipe and then hit enter
+
+pop %>% filter(stname=='Georgia', sumlev==50) %>% select(stname, ctyname, popestimate2018) %>% arrange(desc(popestimate2018))
+```
+
+
+
+# Insert your own code chunk and use filter, select and arrange to get data for your state
+
+
+
+
+
+
+# Summarizing
+```{r}
+# the summarize verb is where you do math. it can be used with or without group by
+
+# to count records we use the n() function
+# to sum values in a column we use the sum() function
+# to average values in a column we use the mean() function  (you would need to load a special package to do medians)
+# there are also min() and max() functions
+
+
+#Let's start by simply counting how many records we have in the dataset
+#notice that I'm assigning a name or label to the answer ("count_of_records")
+
+pop %>% summarise(count_of_records = n() )
+```
+
+
+```{r}
+# Count how many records we have for Georgia
+#this should be all the counties, plus the state record
+
+pop %>%
+  filter(stname=='Georgia') %>%
+  summarise(count_of_records = n() )
+
+```
+
+
+
+```{r}
+# let's say we want to know how many people live in Fulton and Gwinnett counties combined, we need to sum() the values
+#notice we're using the filter to tell R which rows to add together
+
+
+pop %>%
+  filter(stname=='Georgia', ctyname %in% c("Fulton County", "Gwinnett County")) %>% 
+  summarise(total_pop = sum(popestimate2018))
+```
+
+
+# Group By
+```{r}
+# group by is how we summarize data by categories that are in the data. In Excel, we'd use a Pivot Table for this
+# these are situations where you want to collapse the rows of data into groups and get some kind of number -- a count of how many records are in each group; a total value amount based on summing the values in a column, etc. 
+
+#in this dataset, we could get state total populations by grouping all the county records in each state (kind of pointless, though, because we do have a state-level row we can use). We can also group the state records into their respective census regions or divisions
+# the key is having a column with a standarized value that you can use for grouping
+
+
+# group by with NOT work if you forget to include summarize
+
+#notice we need to filter it to the sumlev of 40 (state records). We would double count everybody if we left the county records in
+
+pop %>% 
+  filter(sumlev==40) %>% 
+  group_by(region) %>% 
+  summarize(pop = sum(popestimate2018))
+
+```
+
+```{r}
+# You can do more than one math calculation in summarize
+# if we add a count here, this will show us the number of states in each region (since each row of data is a state)
+
+pop %>% 
+  filter(sumlev==40) %>% 
+  group_by(region) %>% 
+  summarize(pop = sum(popestimate2018),
+            num_states = n() )
+```
+
+
+# Mutate
+```{r}
+# Mutate is another verb in dplyr that has a couple different uses. Here we are going to have it do an additional round of math on our summarized results. We have tallied the total population of each region. Now, let's calculate what percentage of the entire US population (the sum of all those totals) live in each region.
+
+
+pop %>% 
+  filter(sumlev==40) %>% 
+  group_by(region) %>% 
+  summarize(pop = sum(popestimate2018),
+            num_states = n() ) %>% 
+  mutate(pct_of_pop = pop/sum(pop) )
+```
+
+# What states are in region 3?
+```{r}
+
+```
+
+
+# Another way to use mutate
+```{r}
+# here we might want to do percentage change calculations to find out which state or county grew the most over time. Since the population totals are in separate columns, the only way we can do this is by creating a new column (either in the data or on the fly)
+
+# here's how we can do it on the fly
+# let's limit it to counties in Georgia and see which ones grew the most between 2010 and 2018
+
+pop %>% 
+  filter(stname=='Georgia', sumlev==50) %>% 
+  select(ctyname, popestimate2010, popestimate2018) %>% 
+  mutate(pct_chg = (popestimate2018 - popestimate2010)/ popestimate2010) %>% #this is percentage change: New-Old/Old
+  arrange(desc(pct_chg))
+
+
+```
+
+
+# creating new data frames
+
+```{r}
+# if we want to add that calculation as a new column in our table, we will use the assignment operator to create a new data frame
+
+# this will make a whole new dataframe with only Georgia county records;  you won't see any output below; look in the environment
+ga_counties <-  pop %>%
+  filter(stname=='Georgia', sumlev==50) %>% 
+  mutate(pct_chg = (popestimate2018 - popestimate2010)/ popestimate2010)
+```
+
+
+```{r}
+# you can overwrite the existing dataframe by simply using the same name
+#in this case, we'll have it add the pct_chg to all the records in the whole table (notice we don't have filter)
+#notice in the environment that our dataframe has one more column than it previously did
+
+pop <- pop %>%  mutate(pct_chg = (popestimate2018 - popestimate2010)/ popestimate2010)
+```
+
+
+
+
+
+
+
+# DIY  (if time permits)
+
+# use select and filter to find populations from 2010 and 2018 for 2 counties in your area
+
+# use select and filter to get state populations for 2010 and 2018 and then sort by the 2010 population.
+
+# Add a mutate to that last query to calculate percentage change, then sort it by the percentage change. Did any lose population?
+
+# Calculate the percentage change for all counties in the U.S. between 2010 and 2018.  Which counties grew the most? (you will need filter, select and mutate)
+
+# Pick 2 counties in your area. Add together their 2010 and 2018 populations using group by. Then calculate percentage change on those new totals. (You will need filter, group by, summarize and mutate)
+
+

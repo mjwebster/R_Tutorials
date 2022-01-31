@@ -1,0 +1,544 @@
+---
+title: "Dplyr & ggplot - NICAR22"
+output: html_notebook
+---
+
+
+
+
+
+```{r import, warning=FALSE, message=FALSE, include=FALSE}
+
+#load packages 
+library(tidyverse)
+library(janitor) #for cleaning the column names on import
+library(lubridate) #for working with dates
+library(stringr) #for data clean up
+library(formattable) #for displaying data (percents, dollars, etc)
+library(ggthemes) #this will help make our charts look better
+
+
+
+
+```
+
+
+# Import data
+```{r, include=FALSE}
+
+#Note that our data is stored in a sub-directory called "data"
+
+#we're going to use the col_types argument to ensure the dates get stored as dates
+#and that the ageyears column is stored as an integer
+#this particular syntax for setting field formats during the import is specific to the readr package
+#syntax will be different if you are bringing in an Excel file or other format
+
+deaths <- read_csv('./data/opiate_deaths.csv',
+                   col_types=cols(.default="c",  #this is setting all other columns to character
+                                  BIRTHDATE=col_date("%m/%d/%Y"),
+                                  DEATHDATE=col_date("%m/%d/%Y"),
+                                  injury_date=col_date("%m/%d/%Y"),
+                                  ageyears="i")) %>% 
+  clean_names()
+
+#more info here about the date formats: https://readr.tidyverse.org/reference/parse_datetime.html
+
+
+#we're going to spend more time in the next session going over how to handle problematic data on import
+
+```
+
+
+
+
+# Basics of dplyr
+
+SELECT- use this to dictate which columns to display
+FILTER -- use this to filter to only certain records based on certain criteria
+GROUP_BY -- use this in conjunction with summarize to get summary data results; this is where you tell R what columns to "group" the data by
+SUMMARIZE -- use this with (or without) group_by to do math calculations, counting, summing, average, minimum, maximum, etc.
+ARRANGE -- use this to tell R what order to put the records in (sorting)
+MUTATE -- how you can add a new column or edit an existing one; or you can do additional calculations based on your summarized results
+
+More on dplyr: https://youtu.be/CDTHhMJF960
+
+Pipe operator (%>%) is used in Tidyverse to connect actions. (Cmd+Shift+M on a Mac or Control+Shift+M on Windows).
+
+Assignment operator (<-) is used to assign data to a data frame or to a variable (Keyboard shortcuts: Option+- on a Mac or Alt+- on Windows)
+
+
+# Insert a new code chunk and select a few columns (run the names() function above to get a list of columns in your console)
+On Windows: Ctrl-Alt-I
+On Mac: Ctrl-Cmd-I
+Or use the menu in the upper right (to the left of "Run")
+
+
+
+
+
+
+
+# What years does our data cover
+```{r}
+# we don't have a column that indicates the year of death. we only have deathdate, so let's look at min() and max() dates
+
+deaths %>% 
+  summarize(start = min(deathdate),
+            end = max(deathdate))
+```
+
+
+
+
+
+# Explore our data with select and filter<br>
+How many were less than 18 years old?
+
+```{r}
+#select only the ones who were less than 18 years old
+
+deaths %>%
+  select(first_name, ageyears, rescity, deathdate) %>% 
+  filter(ageyears < 18) %>% 
+  arrange(ageyears)
+
+
+
+```
+
+
+
+# What race categories do we have?
+
+```{r }
+# remember that when you want to use group_by, you MUST include summarize
+# n() is how you tell R to count the number of records 
+# since each record is a person who died, this can be interpreted as the number of deaths by race
+
+
+deaths %>%
+  group_by(race) %>% 
+  summarize(count_of_records= n() )
+```
+
+## Now let's use those race values for some filtering...
+
+Remember filtering for a single value requires double equal signs
+```{r}
+deaths %>% 
+  filter(race=='ASIAN') %>% 
+  select(ageyears, rescounty, race)
+```
+
+
+
+
+# Your Turn
+Insert a code chunk and write a query that returns rescounty, deathdate, gender and race for people identified as BLACK and female (F in the gender field)
+
+
+
+
+
+
+
+
+
+
+Filtering with a wildcard<br>
+<p>Too often, our data is inconsistent and telling it to find one thing will be insufficient. In filters in Excel, we have the option to choose "begins with" or "contains" to find values that might not perfectly match. In this dataset, there are several variations for people described as being white. To get them, we'll need this kind of wildcard.</p>
+<p>To do this, we're going to use dplyr's filter function, along with str_detect(), which is a way to do string and pattern matching.</p>
+
+stringr: https://stringr.tidyverse.org/reference/str_detect.html
+
+
+
+```{r }
+#the syntax uses the str_detect() function from the stringr package (part of Tidyverse)
+#  format is  str_detect(dataframename, "what to search for")
+#order of the filter is important here
+
+  deaths %>%
+ filter(stringr::str_detect( race, "multi")) %>% 
+  group_by(gender) %>%
+  summarize(count=n())
+
+```
+
+
+
+
+
+
+# Dealing with dates
+Lubridate: https://lubridate.tidyverse.org/
+
+```{r}
+#if you want to filter to a specific date or a range of dates
+# note how dates are stored in R as YYYY-MM-DD
+
+deaths %>%
+  filter(deathdate>='2015-12-31', deathdate<='2016-01-01') %>%
+  select(deathdate, first_name, last_name, ageyears) 
+  
+```
+
+
+# How many people died each year?
+
+```{r}
+
+# we can use the year() function from the lubridate package.
+# here we're using year() function on the fly in our code. Later we'll use it to create a new column in our dataframe
+
+
+  deaths %>% 
+  mutate(yr = year(deathdate) ) %>% 
+  group_by(yr) %>% 
+  summarize(num_deaths = n() )
+
+```
+
+
+
+
+# Who died on New Year's Eve?
+This uses the month() and day() functions from lubridate package
+
+```{r}
+# you can use the lubridate functions, such as year, month and day, on the fly in your code
+#without having to create a new column in your data frame
+
+#this finds anyone who died on Dec 31st, regardless of year
+deaths %>%
+  filter(month(deathdate)==12 & day(deathdate)==31) %>%
+  select(first_name, last_name, ageyears, deathdate)
+```
+
+
+
+
+
+
+# Practice summarizing.....
+
+
+
+## How many were black females? 
+```{r}
+# this will return a single number because we didn't set a group_by
+
+deaths %>% 
+   filter(gender=='F' , race=='BLACK') %>% 
+   summarize(numdeaths = n() )
+```
+
+
+## Average age of all people
+```{r}
+deaths %>% 
+  summarize( avg_age = mean(ageyears) ) 
+```
+
+## Add a group_by with gender to get avg age by gender
+```{r}
+
+
+
+```
+
+## Add a filter with race=='BLACK' to get avg age by gender of this group
+
+```{r}
+
+
+```
+
+
+# Insert code chunk
+
+## How many people of each gender died?
+
+
+
+
+
+
+# Using mutate()
+Percentage of people who died by gender
+```{r}
+#the dplyr verb called mutate() allows us to add a new column
+#either to a temporary output (like we will do here) or to store it in the dataframe (we'll do that later)
+#You tell mutate the name of the new column (in this case I'm calling it "pct" and then you assign it values in some way)
+#You can do math, transfer information from another column, or use a case_when statement to change what gets put there
+#depending on other values in the table (we'll do that later)
+
+
+deaths %>% 
+  group_by(gender) %>% 
+  summarise(numdeaths = n())%>% 
+  mutate( pct = numdeaths/sum(numdeaths) ) %>% 
+  arrange(desc(pct))
+
+```
+
+
+
+# display as percentage
+The formattable package lets you display results as a percentage
+
+```{r}
+
+deaths %>% 
+  group_by(gender) %>% 
+  summarise(numdeaths = n(), avgage = round(mean(ageyears),1)) %>% 
+  mutate(pct = formattable::percent(numdeaths/sum(numdeaths))) %>% 
+  arrange(desc(pct))
+
+```
+
+
+
+# Cleaning up dirty data
+
+```{r}
+# the race field is inconsistent and doesn't take Hispanic ethnicity into account
+# we can fix that using mutate and case_when() function from dplyr
+
+
+#let's start by looking at what we have
+deaths %>% group_by(race, hispanicethnicity) %>% summarise(count=n())
+```
+
+
+
+# Standardizing data with case_when()
+
+```{r}
+# case_when() is essentially an IF function. You can step through various scenarios to tell R how to treat records with various criteria
+# use that in combination with mutate to clean up problematic data
+
+deaths <-  deaths %>% 
+  mutate(race_ethnicity =  case_when(hispanicethnicity=='HISPANIC' ~ 'Hispanic',
+                                     hispanicethnicity!='HISPANIC' & stringr::str_detect(race,"multi") ~ 'Two or more races-NH',
+                                     hispanicethnicity!='HISPANIC' & race %in% c('ASIAN', 'Other Asian') ~ 'Asian-NH',
+                                     hispanicethnicity!='HISPANIC' & race=='BLACK' ~ 'Black-NH',
+                                     hispanicethnicity!='HISPANIC' & race=='White' ~ 'White-NH',
+                                     hispanicethnicity!='HISPANIC' & race=='AMERICAN INDIAN' ~ 'American Indian-NH',
+                                     hispanicethnicity!='HISPANIC' & race=='Other Race' ~ 'Other-NH',
+                                     hispanicethnicity!='HISPANIC' & race=='Unknown' ~ 'Unknown',
+                                     TRUE ~ 'not identified'))
+
+
+
+```
+
+# What does the new field look like?
+```{r}
+deaths %>%
+  group_by(race_ethnicity) %>%
+  summarise(count=n())
+```
+
+
+
+
+
+# Which county had the most deaths?
+(based on "rescounty" - which is where they lived)
+
+
+```{r}
+#this dataset is anyone who died while they were in Minnesota, regardless of whether they lived there
+# so we need to filter to only MN residents
+
+deaths %>% 
+  filter(resstate=='MINNESOTA') %>% 
+  group_by(rescounty) %>% 
+  summarize(numdeaths = n() ) %>% 
+  arrange(desc(numdeaths))
+
+#Notice that Hennepin County -- the state's most populous -- comes to the top
+```
+
+
+
+
+# Per capita death rates by county
+```{r}
+# let's import population data for each county
+
+pop <-  read_csv('./data/county_pop.csv') %>% clean_names()
+```
+
+
+```{r}
+# next we need to make a new dataframe that has the deaths by county
+# we'll join the population to that 
+
+deaths_by_county <- deaths %>%
+  filter(resstate=='MINNESOTA') %>% 
+  group_by(rescounty) %>% 
+  summarize(deaths= n() )
+
+
+#look through the table. We have 87 rows, but there is an UNKNOWN row
+```
+
+
+
+
+# Joining
+inner_join() -- only return records that match in both tables
+left_join() -- return all the records from the left (or first listed) table
+right_join() -- return all the records from the right (or last listed) table
+
+```{r}
+#identify the names of the columns in each table that you want to join on
+#those go in the same order as their respective tables appear
+# this is going to overwrite the existing deaths_by_county dataframe
+#we are using a left_join to ensure all MN counties are included. What if a county didn't have any deaths?
+
+
+deaths_by_county <-  right_join(deaths_by_county, pop, by=c("rescounty"="geography"))
+```
+
+
+If you want to only bring a few columns from the second table (and avoid having duplicate columns), you can do that as part of the join. Note that we include a pipe and select command before the comma and you MUST include any columns that are being used in the join.
+
+df_new <- inner_join(df1, df2  %>% select(column_df2, col1, col2, col3) , by=c("column_df1"= "column_df2") )
+
+More on joining: https://youtu.be/q9FkxEpQmTo
+
+
+
+
+```{r}
+#looking at our new table, you can see the Wilkin county had no deaths and it has a NULL value
+# before we can do the per capita calculation, we need to change that NULL to zero
+
+
+# Base R approach
+deaths_by_county$deaths[is.na(deaths_by_county$deaths)] <-  0
+
+
+
+
+
+
+```
+
+
+
+# Use mutate to calculate per capita rate
+```{r}
+deaths_by_county <- deaths_by_county %>% 
+  mutate(per10k = (deaths/pop_estimate2016)*10000)
+```
+
+
+
+
+
+
+# Create a chart
+How many people died each year?
+
+
+```{r}
+# first we need to put a year column in our dataframe so we can work from that
+# we'll repeat the code we used above, but this time have it make a new column and new dataframe (overwriting existing)
+
+deaths <-  deaths %>% 
+  mutate(yr = year(deathdate))
+```
+
+
+
+```{r}
+#the most simple code needed for a chart using the ggplot2 package from Tidyverse
+#syntax:  ggplot(dataframe_name, aes(x= columnname))
+#aes means aesthetics
+
+ggplot(deaths, aes(x=yr)) + 
+  geom_bar()
+
+#this is simply relying on stat_count in ggplot to count the records
+```
+
+
+# Other chart types need a column with the number
+```{r}
+# easiest route for a beginner is to make a new dataframe
+
+deaths_by_yr <-  deaths %>% group_by(yr) %>% summarise(num_deaths = n() )
+
+
+ggplot(deaths_by_yr, aes(x=yr, y=num_deaths)) + 
+  geom_line(stat="identity")
+```
+
+
+
+
+
+# Zero base our chart
+```{r}
+ggplot(deaths_by_yr, aes(x=yr, y=num_deaths)) + 
+  geom_line(stat="identity")+
+  scale_y_continuous(limits=c(0, 600))  #the limits function lets you set 0 as the starting point
+```
+
+# Fix the axis labels
+
+```{r}
+ggplot(deaths_by_yr, aes(x=yr, y=num_deaths)) + 
+  geom_line(stat="identity")+
+  scale_y_continuous(limits=c(0, 600), breaks=seq(0,600,100))+  #breaks is how  you set the labels on the axis
+  scale_x_continuous(breaks=seq(2006,2018,1))
+```
+# Add title and other labels
+```{r}
+ggplot(deaths_by_yr, aes(x=yr, y=num_deaths)) + 
+  geom_line(stat="identity")+
+  scale_y_continuous(limits=c(0, 600), breaks=seq(0,600,100))+
+  scale_x_continuous(breaks=seq(2006,2018,2))+
+  labs(title="Opioid deaths in Minnesota",
+       subtitle="2006-2018",
+       caption="Source: Minnesota Department of Health",
+       x="Year",
+       y="Number of deaths")
+```
+
+# Add a theme
+```{r}
+ggplot(deaths_by_yr, aes(x=yr, y=num_deaths)) + 
+  geom_line(stat="identity")+
+  scale_y_continuous(limits=c(0, 600), breaks=seq(0,600,100))+
+  scale_x_continuous(breaks=seq(2006,2018,2))+
+  labs(title="Opioid deaths in Minnesota",
+       subtitle="2006-2018",
+       caption="Source: Minnesota Department of Health",
+       x="Year",
+       y="Number of deaths")+
+  theme_hc()
+
+#ggthemes https://exts.ggplot2.tidyverse.org/ggthemes.html
+
+# ggplot themes:  https://ggplot2.tidyverse.org/reference/ggtheme.html
+
+
+```
+
+
+
+
+# Export your chart
+```{r}
+#https://ggplot2.tidyverse.org/reference/ggsave.html
+
+ggsave("deaths_by_year_chart.jpg", width=8, height=5, units="in", dpi="print")
+```
+
+
+
