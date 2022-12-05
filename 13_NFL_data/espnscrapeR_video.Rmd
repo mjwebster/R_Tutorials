@@ -1,0 +1,498 @@
+---
+title: "Using ESPN game probability data"
+output: html_notebook
+---
+
+```{r}
+
+#LOAD LIBRARIES
+
+
+library(espnscrapeR)  #https://jthomasmock.github.io/espnscrapeR/
+library(tidyverse)
+library(janitor)
+library(scales)
+library(ggthemes)
+library(lubridate)
+library(stringr)
+
+
+#list of functions in the espnscrapeR package
+#https://jthomasmock.github.io/espnscrapeR/reference/index.html
+
+```
+
+
+# Get list of teams
+
+```{r}
+teams <-  get_nfl_teams()
+
+
+```
+
+
+# Get list of games
+```{r}
+#this is the syntax that the documentation says to use to get a particular season
+games <-  get_nfl_schedule(season="2022")
+
+
+
+#but let's look at what this returns
+games %>% group_by(season, type, slug) %>% summarise(count=n())
+
+#notice it gives us games played in the early part of 2022 but were part of the 2021 season
+# even the documentation notes this: https://jthomasmock.github.io/espnscrapeR/reference/get_nfl_schedule.html
+
+
+```
+
+
+
+
+```{r}
+# so let's do some filtering as we bring it in
+#we also need to clean up the game date field (we'll make a new one)
+
+
+games <-  get_nfl_schedule(season="2022")%>%
+  mutate(new_game_date = lubridate::as_date(str_sub(game_date,1,10))) %>% 
+  filter(type=='2', new_game_date > '2022-09-01', new_game_date< today())
+```
+
+
+
+
+# What's in the game data?
+
+```{r}
+games %>% select(new_game_date, home_team_name,away_team_name, home_score, away_score) %>% 
+  arrange(new_game_date)
+```
+
+
+
+
+
+
+# Winnow down to games for one team
+```{r}
+
+
+#limit to only Minnesota Vikings games
+vikings_games <- games %>% filter(home_team_name=='Vikings' | away_team_name=='Vikings')
+
+
+
+```
+
+# get_espn_win_prob() function
+
+
+```{r}
+# You can easily get the play-by-play win probability for any one game by getting the gameid from that list of games
+
+# let's look at the crazy Vikings-Bills games in November 2022
+
+vikes_bills <-  get_espn_win_prob("401437833")
+
+
+# in this game, the Vikings were the "away" team. So we will look at the away_win_percentage
+# the row_is is the equivalent of "play number" in the game, so you can follow the game chronologically
+vikes_bills %>% select(row_id, home_win_percentage, away_win_percentage)
+```
+
+
+# Basic ggplot of one game
+
+```{r}
+
+#ggplot needs to know what data frame to use (vikes_bills)
+# it wants to know what column should be the x axis (row_id)
+# it wants to know what column should be the y axis (away_win_percentage)
+# and then the type of chart (geom_line)
+# we have two optional things here -- the color and size of the line
+# the color Hex code is the official Vikings color, which I got from the teams dataframe
+
+ggplot(vikes_bills, aes(x=row_id, y=away_win_percentage))+
+  geom_line(stat="identity", color="#240A67", linewidth=.75)
+```
+
+
+# get_nfl_pbp
+
+```{r}
+# There is also a function to get play-by-play details
+# Let's look at that Vikings-Bills game again
+#here's how you would pull for one game
+
+vikes_bills_pbp <-  get_nfl_pbp("401437833")
+
+vikes_bills_pbp
+```
+
+
+```{r}
+#there are some useful fields in the play_by_play data that might help us in working with the probability data. For example, play_type tells us "End of Regulation" (which really just means beginning of overtime) and we can also see "End of Half" (halftime)
+
+vikes_bills_pbp %>% group_by(play_type) %>% summarise(count=n())
+```
+
+
+
+
+```{r}
+# let's join together the probability data and the play by play data for the Vikings-Bills game
+
+vikes_bills_prob <-  left_join(vikes_bills, vikes_bills_pbp %>% select(game_id, play_id, quarter, clock_text, home_score, away_score, pos_team_name, play_type, yards_gained, play_desc), by=c("game_id"="game_id", "play_id"="play_id"))
+
+
+```
+
+
+
+# Improve our ggplot
+```{r}
+
+# Let's start by fixing the axes
+
+ggplot(vikes_bills_prob, aes(x=row_id, y=away_win_percentage))+
+  geom_line(stat="identity", color="#240A67", linewidth=.75)+
+  scale_y_continuous(labels = scales::percent)+  #this converts y labels to percentages
+  scale_x_continuous(breaks=NULL)  #this removes the x labels altogether
+
+  
+```
+
+
+```{r}
+# Next, let's add some titles
+
+ggplot(vikes_bills_prob, aes(x=row_id, y=away_win_percentage))+
+  geom_line(stat="identity", color="#240A67", linewidth=.75)+
+  scale_y_continuous(labels = scales::percent)+  #this converts y labels to percentages
+  scale_x_continuous(breaks=NULL)+  #this removes the x labels altogether
+  labs(title = "Minnesota Vikings win probability vs Bufflo Bills",
+       subtitle = "Nov 13, 2022",
+       caption = "Source: ESPN",
+       x=NULL,
+       y=NULL)
+```
+
+```{r}
+# Finally, let's add an annotation line to denote the start of overtime
+
+ggplot(vikes_bills_prob, aes(x=row_id, y=away_win_percentage))+
+  geom_line(stat="identity", color="#240A67", size=.75)+
+  scale_y_continuous(labels = scales::percent)+  #this converts y labels to percentages
+  scale_x_continuous(breaks=NULL)+  #this removes the x labels altogether
+  labs(title = "Minnesota Vikings win probability vs Bufflo Bills",
+       subtitle = "Nov 13, 2022",
+       caption = "Source: ESPN",
+       x=NULL,
+       y=NULL)+
+    geom_vline(data=filter(vikes_bills_prob, play_type=='End of Regulation'), mapping= aes(xintercept=row_id), color="red")  #this adds the red line
+```
+
+
+# Save your ggplot as a jpg
+```{r}
+
+ggsave("vikes_bills_prob.jpg", width=6, height=4, units="in", dpi="print")
+```
+
+
+####################################
+# Start of 2nd video
+
+
+# How to get multiple games at one time
+
+```{r}
+
+# First we need to make a list of the game ids that we want to pull
+#In this case, we're going to grab all the Vikings games from that dataframe we made earlier
+
+# this gets stored as a list (not a data frame)
+
+vikings_gameids <-  vikings_games %>% pull(game_id) 
+
+
+
+# we'll use those gameids to tell the scraper to get win probability data for those games
+# this uses the map_dfr() function from the purrr package to loop
+
+vikings_games_winprob <- vikings_gameids %>% 
+	purrr::map_dfr(get_espn_win_prob)
+
+
+
+
+```
+
+
+# Join game and probability data
+```{r}
+# Next let's join this new dataframe back to the games table to gather a few more pieces of information like the names of the teams and the date
+#this uses left_join() function from tidyverse
+
+vikings_games_winprob <-  left_join(vikings_games_winprob, vikings_games %>% select(game_id, new_game_date, matchup_short, home_team_name, away_team_name, home_win), by=c("game_id"="game_id"))
+```
+
+
+
+```{r}
+# Then we need to make a new column that has the Vikings win probability for each game, regardless of whether they were the home team or away team.
+# this uses the case_when() function from dplyr to look and see whether they were home team or away team and then pull the win_percentage depending 
+
+vikings_games_winprob <- vikings_games_winprob %>%
+  mutate(vikings_prob = case_when(home_team_name=='Vikings' ~ home_win_percentage,
+                                  TRUE ~ away_win_percentage))
+```
+
+
+
+# Get play-by-play data for all the games
+```{r}
+
+# Next we'll repeat that same loop process but this time with the play-by-play data
+
+vikings_games_pbp <- vikings_gameids %>% 
+	map_dfr(get_nfl_pbp)
+
+
+
+
+```
+
+
+# Join probability and play-by-play data
+```{r}
+# and then we'll join the probability data and the play-by-play data
+# notice we're just taking a handful of fields from the PBP data
+
+prob <-  left_join(vikings_games_winprob, vikings_games_pbp %>% select(game_id, play_id, quarter, clock_text, home_score, away_score, pos_team_name, play_type, yards_gained, play_desc), by=c("game_id"="game_id", "play_id"="play_id"))
+```
+
+
+
+# Label the plays by whether the Vikings won the game or not
+```{r}
+prob <-  prob %>% mutate(vikings_win = case_when(home_win==1 & home_team_name=='Vikings' ~ 'yes',
+                                                 home_win==0 & away_team_name=='Vikings' ~ 'yes',
+                                                 TRUE ~ 'no'))
+
+
+# we can check to see that all the rows got labeled
+prob %>% group_by(vikings_win) %>% summarise(count=n())
+```
+
+
+
+
+
+# How often were the Vikings the underdogs at half time?
+```{r}
+
+# we can use that play_type column to find all the records that represent the end of the first half. we'll make this into it's own little data frame
+
+vikes_halftime <-  prob %>% filter(play_type=='End of Half') %>% select(new_game_date, quarter, clock_text, matchup_short, vikings_prob, vikings_win)
+
+vikes_halftime
+
+#here we can see all the games
+```
+
+
+```{r}
+
+# how many games did the Vikings win even though they had less than 50% chance of winning as of halftime?
+
+vikes_halftime %>% filter(vikings_prob<.5) %>%
+  group_by(vikings_win) %>% 
+  summarise(count=n()) %>% 
+  mutate(pct = count/sum(count))
+```
+
+```{r}
+# This time instead of making a subtable, let's do something similar but with the whole original table
+
+#What percentage of the time did the Vikings win when they had less than 90% chance of winning at the two-minute warning? In other words... the game was still on the line
+
+
+#First let's find the records for the two-minute warning in the 4th quarter
+prob %>% 
+  filter(quarter==4, play_type=="Two-minute warning")
+```
+
+```{r}
+# let's add one more thing to the filter to winnow it down to only gmes where the vikings probability of winning was less than 90% at that mark
+
+# then we'll group and summarise like we did with the last one
+
+prob %>% 
+  filter(quarter==4, play_type=="Two-minute warning", vikings_prob<.9) %>% 
+  group_by(vikings_win) %>% 
+  summarise(count=n()) %>% 
+  mutate(pct = count/sum(count))
+```
+
+
+####################### Start of 3rd video
+
+# Facet plots 
+
+```{r}
+# In the first video we made a chart of the play-by-play win probability for a single game. I want to make one that has all the games lined up next to each other. 
+# This can be done using facet_wrap() function in ggplot
+
+#One of the first things we need to do is to ensure the order of the plots go in the order we want -- in this case, the order of the games. 
+#To do that, you need to reorder the underlying data, specifically the column that you are going to use to define the separate plots. In this case, we'll use the column "matchup_short"
+
+#first let's look at the values in that column
+
+unique(prob$matchup_short)
+```
+
+```{r}
+#set the order of the matchup_short field, based on the game date. The default is that it will go in chronological (or ascending) order, which is what we want in this case
+
+prob$matchup_short <-  fct_reorder(prob$matchup_short, prob$new_game_date)
+```
+
+
+
+```{r}
+
+# the first 4 lines of our ggplot will be basically identical to the one we made in the first video; except we're referring to a different data frame and have a different y column
+
+# then we'll add the facet_wrap line. this is saying base the charts on the variable called "matchup_short" and to have 2 charts on each row
+
+
+
+ggplot(prob, aes(x=row_id, y=vikings_prob))+
+  geom_line(stat="identity", color="#240A67", size=.75)+
+  scale_y_continuous(labels = scales::percent)+
+  scale_x_continuous(breaks=NULL)+
+  facet_wrap(vars(matchup_short), ncol = 2)
+
+# notice that the lines end earlier than others. This is because the default of a facet wrap is to make the X axis exactly the same length for each chart. 
+```
+
+
+
+# Fix the scales
+
+```{r, fig.height=12, fig.width=8}
+
+# we can fix that X scale problem by adding   scales="free_x" to the facet line
+# we can also make sure the charts aren't so squished by setting the figure height and width in the {r} line above
+
+ggplot(prob, aes(x=row_id, y=vikings_prob))+
+  geom_line(stat="identity", color="#240A67", size=.75)+
+  scale_y_continuous(labels = scales::percent)+
+  scale_x_continuous(breaks=NULL)+
+  facet_wrap(vars(matchup_short),scales="free_x", ncol = 2)
+```
+
+# Add some more styling
+
+```{r, fig.height=12, fig.width=8}
+ggplot(prob, aes(x=row_id, y=vikings_prob))+
+  geom_line(stat="identity", color="#240A67", size=.75)+
+  scale_y_continuous(labels = scales::percent)+
+  scale_x_continuous(breaks=NULL)+
+  facet_wrap(vars(matchup_short), scales="free_x", ncol = 2)+
+  geom_hline(yintercept = .5, color="#636363") #this adds a horizontal line at the 50% mark
+
+```
+
+
+# Identify games that went into overtime
+
+```{r, fig.height=12, fig.width=8}
+ggplot(prob, aes(x=row_id, y=vikings_prob))+
+  geom_line(stat="identity", color="#240A67", size=.75)+
+  scale_y_continuous(labels = scales::percent)+
+  scale_x_continuous(breaks=NULL)+
+  facet_wrap(vars(matchup_short), scales="free_x", ncol = 2)+
+  geom_hline(yintercept = .5, color="#636363") + 
+    geom_vline(data=filter(prob, play_type=='End of Regulation'), mapping= aes(xintercept=row_id), color="red")  #this adds a vertical line on any charts where there is a record with an End of Regulation play (meaning the game went into overtime) 
+```
+
+
+# Add "Overtime" label
+
+```{r, fig.height=12, fig.width=8}
+ggplot(prob, aes(x=row_id, y=vikings_prob))+
+  geom_line(stat="identity", color="#240A67", size=.75)+
+  scale_y_continuous(labels = scales::percent)+
+  scale_x_continuous(breaks=NULL)+
+  facet_wrap(vars(matchup_short), scales="free_x", ncol = 2)+
+  geom_hline(yintercept = .5, color="#636363") + 
+    geom_vline(data=filter(prob, play_type=='End of Regulation'), mapping= aes(xintercept=row_id), color="red")+ 
+    geom_text(mapping = aes(x = row_id,
+                          y = 0, #using zero here puts it at the bottom of the chart. put it to .5 so it's halfway up the line
+                          label = "Overtime",  
+                          hjust = 0, #hjust and vjust set the distance from the line
+                          vjust = 1),
+                          color="red",  #sets the color of the line
+                          angle="90",  #this flips it to be vertical 
+              data = filter(prob, play_type=='End of Regulation')) 
+
+
+# this last chunk of code adds a label -- "Overtime" -- near the red line
+
+
+#notice that the parentheses for aes() comes after vjust; color, angle and data are outside of that
+
+```
+
+
+# Final styling
+
+```{r, fig.height=12, fig.width=8}
+ggplot(prob, aes(x=row_id, y=vikings_prob))+
+  geom_line(stat="identity", color="#240A67", size=.75)+
+  scale_y_continuous(labels = scales::percent)+
+  scale_x_continuous(breaks=NULL)+
+  facet_wrap(vars(matchup_short), scales="free_x", ncol = 2)+
+  geom_hline(yintercept = .5, color="#636363") +
+    geom_vline(data=filter(prob, play_type=='End of Regulation'), mapping= aes(xintercept=row_id), color="red")+ 
+    geom_text(mapping = aes(x = row_id,
+                          y = 0, 
+                          label = "Overtime",  
+                          hjust = 0, 
+                          vjust = 1),
+                          color="red", 
+                          angle="90",  
+              data = filter(prob, play_type=='End of Regulation')) +
+   labs(title="Vikings play-by-play win probability",  #add title and other labels
+        caption = "Source: ESPN",
+       x=NULL,
+       y=NULL)+  #
+theme(
+
+       strip.text.x = element_text(
+        size = 12, color = "white", face = "bold"
+        ),
+   strip.background = element_rect(
+     color="black", fill="#240A67", size=1.5, linetype="solid"
+   ),
+     plot.title = element_text(size = 20)   #this sets the size of the title at the top
+     
+   )
+
+
+# the theme section styles the top of each chart
+```
+
+
+# Save the chart
+```{r}
+
+ggsave("vikes_prob_facet.jpg", width=8, height=12, units="in", dpi="print")
+```
+
+
